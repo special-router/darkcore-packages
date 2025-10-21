@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [ geoupdate, darkcore-xray ]
+        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd ]
       fail-fast: false
 
     steps:
@@ -27,7 +27,7 @@ jobs:
 
       - name: Download OpenWrt SDK
         run: |
-          wget https://downloads.openwrt.org/releases/24.10.2/targets/rockchip/armv8/openwrt-sdk-24.10.2-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          wget https://mirror-03.infra.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           tar xf openwrt-sdk-*.tar.zst
           rm openwrt-sdk-*.tar.zst
           mv openwrt-sdk-* openwrt-sdk

@@ -12,7 +12,7 @@ PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
-GO_PKG:=github.com/special-router/geoupdate
+GO_PKG:=github.com/special-router/dcvpnupd
 GO_PKG_BUILD_PKG:=$(GO_PKG)/main
 
 include $(INCLUDE_DIR)/package.mk
@@ -21,7 +21,7 @@ include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 define Package/geoupdate
 	SECTION:=utils
 	CATEGORY:=DarkCore
-	TITLE:=Geosite and Geoip updater
+	TITLE:=Vpn connection updater
 	DEPENDS:=$(GO_ARCH_DEPENDS)
 endef
 
@@ -33,7 +33,7 @@ endef
 define Package/geoupdate/install
 	$(call GoPackage/Package/Install/Bin,$(PKG_INSTALL_DIR))
 	$(INSTALL_DIR) $(1)/usr/bin/
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/main $(1)/usr/bin/geoupdate
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/main $(1)/usr/bin/dcvpnupd
 endef
 
 $(eval $(call GoBinPackage,$(PKG_NAME)))
