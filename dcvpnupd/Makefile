@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=geoupdate
+PKG_NAME:=dcvpnupd
 PKG_VERSION:=0.0.5
 PKG_RELEASE:=1
 
