@@ -4,8 +4,10 @@ PKG_NAME:=darkcore-xray
 PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 
+XRAY_VERSION:=25.1.30
+
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://codeload.github.com/XTLS/Xray-core/tar.gz/v25.1.30?
+PKG_SOURCE_URL:=https://codeload.github.com/XTLS/Xray-core/tar.gz/v$(XRAY_VERSION)?
 PKG_HASH:=983ee395f085ed1b7fbe0152cb56a5b605a6f70a5645d427c7186c476f14894e
 
 PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
@@ -21,10 +23,10 @@ GO_PKG:=github.com/xtls/xray-core
 GO_PKG_BUILD_PKG:=github.com/xtls/xray-core/main
 GO_PKG_LDFLAGS_X:= \
 	$(GO_PKG)/core.build=OpenWrt \
-	$(GO_PKG)/core.version=$(PKG_VERSION)
+	$(GO_PKG)/core.version=$(XRAY_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
-include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
+include ../../lang/golang/golang-package.mk
 
 define Package/darkcore-xray
   TITLE:=A platform for building proxies to bypass network restrictions
