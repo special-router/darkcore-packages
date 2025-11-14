@@ -18,7 +18,7 @@ GO_PKG_BUILD_PKG:=$(GO_PKG)/main
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
-define Package/geoupdate
+define Package/dcvpnupd
 	SECTION:=utils
 	CATEGORY:=DarkCore
 	TITLE:=Vpn connection updater
@@ -30,7 +30,7 @@ define Build/Prepare
 	$(CP) ./src/* $(PKG_BUILD_DIR)/
 endef
 
-define Package/geoupdate/install
+define Package/dcvpnupd/install
 	$(call GoPackage/Package/Install/Bin,$(PKG_INSTALL_DIR))
 	$(INSTALL_DIR) $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/main $(1)/usr/bin/dcvpnupd
