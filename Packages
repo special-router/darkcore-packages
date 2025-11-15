@@ -1,35 +1,50 @@
-Package: darkcore-rules
-Version: 1.0.1-r1
+Package: darkcore-main
+Version: 1.0.0-r1
 Depends: libc
-Section: net
+Section: utils
 Architecture: aarch64_generic
-SHA256sum: b310c9291c8e576fe0b6474e57a8556b04d8aacf7ea04df14a48c5b45e88efb9
-Size: 1515
-Filename: darkcore-rules_1.0.1-r1_aarch64_generic.ipk
-Source: feeds/base/darkcore-rules
-Description: Darkcore Rules
-SourceName: darkcore-rules
-SourceDateEpoch: 1750711236
+SHA256sum: f9d4652419a6c3914f5450cb538df98018da27dcc8b201a3e41071ddeafc05eb
+Size: 882
+Filename: darkcore-main_1.0.0-r1_aarch64_generic.ipk
+Source: feeds/base/darkcore-main
+Description: Darkcore Main
+SourceName: darkcore-main
+SourceDateEpoch: 1760891865
 Installed-Size: 10240
 
 
 Package: darkcore-xray
-Version: 25.1.30-r1
+Version: 1.0.0-r1
 Depends: libc, ca-bundle
 Section: net
 Architecture: aarch64_generic
 Maintainer: Tianling Shen <cnsztl@immortalwrt.org>
-SHA256sum: a316ebd302d83ed27e74619cfd9d638304bde38f6c4207bbd7722c089c02778b
-Size: 9840179
-Filename: darkcore-xray_25.1.30-r1_aarch64_generic.ipk
+SHA256sum: 754e43405df83a361b4d51f50bce06d1fb672a1aba364f1b95ff5f5d5fa3474a
+Size: 9840861
+Filename: darkcore-xray_1.0.0-r1_aarch64_generic.ipk
 Source: feeds/base/darkcore-xray
 Description: Xray, Penetrates Everything. It helps you to build your own computer network.
 License: MPL-2.0
 SourceName: darkcore-xray
 LicenseFiles: LICENSE
-SourceDateEpoch: 1750711236
+SourceDateEpoch: 1760891865
 URL: https://xtls.github.io
 Installed-Size: 27637760
+
+
+Package: dcvpnupd
+Version: 0.0.5-r1
+Depends: libc
+Section: utils
+Architecture: aarch64_generic
+SHA256sum: 680c5982d44521a108186d55710f9e2411fb3392f9b258b443c37d4e8a67aec9
+Size: 2088591
+Filename: dcvpnupd_0.0.5-r1_aarch64_generic.ipk
+Source: feeds/base/dcvpnupd
+Description: Vpn connection updater
+SourceName: dcvpnupd
+SourceDateEpoch: 1760891865
+Installed-Size: 4997120
 
 
 Package: geoupdate
@@ -37,13 +52,13 @@ Version: 0.0.5-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: 0d0ada274238d52f012b79f8ee2785411251c203e44793fb152d116525214e19
-Size: 2058338
+SHA256sum: 1cf0e4999a0642cbfad8c4c30a6a43e209e619fb51f75af3f89e0efbfe6f4d11
+Size: 2058645
 Filename: geoupdate_0.0.5-r1_aarch64_generic.ipk
 Source: feeds/base/geoupdate
 Description: Geosite and Geoip updater
 SourceName: geoupdate
-SourceDateEpoch: 1750711236
+SourceDateEpoch: 1760891865
 Installed-Size: 4935680
 
 
