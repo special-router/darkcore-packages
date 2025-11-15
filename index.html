@@ -16,7 +16,7 @@
       <button id="btn-packages" onclick="showSection('packages')">Packages</button>
     </div>
     <h1>
-      <a href="https://github.com/ytreu111/darkcore-packages" target="_blank">
+      <a href="https://github.com/special-router/darkcore-packages" target="_blank">
         DarkCore Packages Repository
       </a>
     </h1>
@@ -29,15 +29,15 @@
         <p>Import the public key used to verify package signatures:</p>
         <div class="code-block">
           <p>Run this command on your OpenWrt device:</p>
-          <pre>wget -O /tmp/key-build.pub https://ytreu111.github.io/darkcore-packages/key-build.pub && opkg-key add /tmp/key-build.pub</pre>
+          <pre>wget -O /tmp/key-build.pub https://special-router.github.io/darkcore-packages/key-build.pub && opkg-key add /tmp/key-build.pub</pre>
         </div>
         <p>Add the package feed to your OpenWrt configuration:</p>
         <div class="code-block">
           <p>Edit <code>/etc/opkg/customfeeds.conf</code>:</p>
-          <pre>echo "src/gz darkcore https://ytreu111.github.io/darkcore-packages" >> /etc/opkg/customfeeds.conf</pre>
+          <pre>echo "src/gz darkcore https://special-router.github.io/darkcore-packages/" >> /etc/opkg/customfeeds.conf</pre>
 
           <p>Or manually add this line:</p>
-          <pre>src/gz darkcore https://ytreu111.github.io/darkcore-packages</pre>
+          <pre>src/gz darkcore https://special-router.github.io/darkcore-packages/</pre>
         </div>
       </section>
     </section>
