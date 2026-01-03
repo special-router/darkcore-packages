@@ -5,9 +5,20 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"fmt"
 	"os/exec"
 	"strings"
 )
+
+type APIError struct {
+    StatusCode int    `json:"status_code"`
+    Message    string `json:"message"`
+    Details    string `json:"details,omitempty"`
+}
+
+func (e APIError) Error() string {
+    return fmt.Sprintf("HTTP %d: %s", e.StatusCode, e.Message)
+}
 
 const (
 	urlTemplate = "http://195.66.213.120:3000/api/connections/{uuid}/config/"
@@ -15,8 +26,6 @@ const (
 )
 
 func fetchData(uuid string) ([]byte, error) {
-	log.Printf("%v", uuid)
-
 	url := strings.Replace(urlTemplate, "{uuid}", strings.TrimSpace(uuid), -1)
 	resp, err := http.Get(url)
 
@@ -25,6 +34,16 @@ func fetchData(uuid string) ([]byte, error) {
 	}
 
 	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+        return nil, APIError{
+            StatusCode: resp.StatusCode,
+            Message:    resp.Status,
+            Details:    string(body),
+        }
+    }
 
 	return io.ReadAll(resp.Body)
 }
@@ -55,8 +74,6 @@ func main() {
 		log.Printf("Ошибка получения id устройства")
 		os.Exit(1)
 	}
-
-  log.Printf("hui: %v", uuid)
 
 	newConfig, err := fetchData(uuid)
 
