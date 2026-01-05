@@ -1,16 +1,58 @@
 #!/bin/sh /etc/rc.common
 
 USE_PROCD=1
-START=00
+START=99
 
 CONF="xray"
 PROG="/usr/bin/xray"
 GATEWAY="192.168.2.1"
+TABLE_ID="100"
+FWMARK="1"
 
 wait_for_gateway() {
-    until ping -c1 $GATEWAY >/dev/null 2>&1; do
+    local max_attempts=30
+    local attempt=0
+
+    echo "Waiting for gateway $GATEWAY..."
+    until ping -c1 -W1 $GATEWAY >/dev/null 2>&1; do
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            echo "Gateway not reachable after $max_attempts attempts"
+            return 1
+        fi
         sleep 1
     done
+    echo "Gateway $GATEWAY is reachable"
+    return 0
+}
+
+check_nftables_file() {
+    local datadir="$1"
+    local nft_file="${datadir}/nftables.rulesv46"
+
+    if [ ! -f "$nft_file" ]; then
+        echo "Warning: nftables rules file not found: $nft_file"
+        return 1
+    fi
+    return 0
+}
+
+setup_routing() {
+    if ! ip rule show | grep -q "fwmark $FWMARK lookup $TABLE_ID"; then
+        ip rule add fwmark $FWMARK table $TABLE_ID
+    fi
+
+    ip route add local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
+
+    if ! ip route show table $TABLE_ID | grep -q "default via $GATEWAY"; then
+        ip route add default via $GATEWAY table $TABLE_ID
+    fi
+}
+
+cleanup_routing() {
+    ip rule del fwmark $FWMARK table $TABLE_ID 2>/dev/null
+    ip route del local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
+    ip route del default via $GATEWAY table $TABLE_ID 2>/dev/null
 }
 
 start_service() {
@@ -32,10 +74,22 @@ start_service() {
 	config_get dialer "config" "dialer"
 	config_get format "config" "format" "json"
 
-  ip rule add fwmark 1 table 100
-  ip route add local 0.0.0.0/0 dev lo table 100
-  ip route add default via $GATEWAY
-  nft -f "${datadir}/nftables.rulesv46"
+    if [ ! -x "$PROG" ]; then
+        echo "Error: $PROG not found or not executable"
+        return 1
+    fi
+
+    if ! wait_for_gateway; then
+        echo "Failed to reach gateway, continuing anyway..."
+    fi
+
+    setup_routing
+
+    if check_nftables_file "$datadir"; then
+        nft -f "${datadir}/nftables.rulesv46"
+    else
+        echo "Warning: Skipping nftables rules loading"
+    fi
 
 	procd_open_instance "$CONF"
 	procd_set_param command "$PROG" run
@@ -61,10 +115,9 @@ start_service() {
 }
 
 stop_service() {
-    ip rule del fwmark 1 table 100
-    ip route del local 0.0.0.0/0 dev lo table 100
-    ip route del default via $GATEWAY
-    nft flush ruleset
+    nft flush ruleset 2>/dev/null
+    cleanup_routing
+    echo "cleaned"
 }
 
 reload_service() {
