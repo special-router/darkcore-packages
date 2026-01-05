@@ -4,7 +4,7 @@ PKG_NAME:=darkcore-xray
 PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 
-XRAY_VERSION:=25.12.8
+XRAY_VERSION:=25.1.30
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/XTLS/Xray-core/tar.gz/v$(XRAY_VERSION)?
