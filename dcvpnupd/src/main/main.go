@@ -35,17 +35,21 @@ func fetchData(uuid string) ([]byte, error) {
 
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if resp.StatusCode != http.StatusOK {
-        return nil, APIError{
-            StatusCode: resp.StatusCode,
-            Message:    resp.Status,
-            Details:    string(body),
-        }
-    }
+		return nil, APIError{
+			StatusCode: resp.StatusCode,
+			Message:    resp.Status,
+			Details:    string(body),
+		}
+	}
 
-	return io.ReadAll(resp.Body)
+	return body, nil
 }
 
 func restartService() {
