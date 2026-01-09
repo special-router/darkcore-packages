@@ -56,10 +56,10 @@ define Package/darkcore-xray/install
 	$(INSTALL_DIR) $(1)/etc/init.d/
 	$(INSTALL_BIN) $(CURDIR)/files/xray.init $(1)/etc/init.d/xray
 
-  $(INSTALL_DIR) $(1)/etc/init.d/
-  $(INSTALL_BIN) $(CURDIR)/files/xrayrestart.init $(1)/etc/init.d/xrayrestart
-  $(INSTALL_DIR) $(1)/root/
-  $(INSTALL_BIN) $(CURDIR)/files/xrayrestart.sh $(1)/root/xrayrestart.sh
+	$(INSTALL_DIR) $(1)/etc/init.d/
+	$(INSTALL_BIN) $(CURDIR)/files/xrayrestart.init $(1)/etc/init.d/xrayrestart
+	$(INSTALL_DIR) $(1)/root/
+	$(INSTALL_BIN) $(CURDIR)/files/xrayrestart.sh $(1)/root/xrayrestart.sh
 
 	$(INSTALL_DIR) $(1)/etc/xray/
 	$(INSTALL_DATA) $(CURDIR)/files/configs/dns.json $(1)/etc/xray/
