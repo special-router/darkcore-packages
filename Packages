@@ -14,14 +14,14 @@ Installed-Size: 10240
 
 
 Package: darkcore-xray
-Version: 1.0.2-r1
+Version: 1.0.3-r1
 Depends: libc, ca-bundle
 Section: net
 Architecture: aarch64_generic
 Maintainer: Tianling Shen <cnsztl@immortalwrt.org>
-SHA256sum: 828dbbbacd8d7a06319f1adb7ee0c40fdc1f99f56ddcf275e67633f97090d75c
-Size: 9841543
-Filename: darkcore-xray_1.0.2-r1_aarch64_generic.ipk
+SHA256sum: 4437b373c6c5551c3a38e843aad9962ef1725b19114a47c17875a9b7d1a74dc5
+Size: 9841506
+Filename: darkcore-xray_1.0.3-r1_aarch64_generic.ipk
 Source: feeds/base/darkcore-xray
 Description: Xray, Penetrates Everything. It helps you to build your own computer network.
 License: MPL-2.0
