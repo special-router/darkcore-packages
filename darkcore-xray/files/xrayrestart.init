@@ -4,6 +4,6 @@ START=99
 USE_PROCD=1
 
 start_service() {
-	sleep 10
+	sleep 20
 	/root/xrayrestart.sh &
 }
