@@ -21,7 +21,7 @@ func (e APIError) Error() string {
 }
 
 const (
-	urlTemplate = "http://195.66.213.120:3000/api/connections/{uuid}/config/"
+	urlTemplate = "http://195.66.213.74:3000/api/connections/{uuid}/config/"
 	configPath  = "/etc/xray/proxy.json"
 )
 
