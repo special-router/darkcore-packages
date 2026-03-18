@@ -37,8 +37,8 @@ Version: 0.0.6-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: a0961e1cbb411a21e46bc837f3e094dbec4b5dde6dc1ad68c803afe377c8748e
-Size: 2088949
+SHA256sum: df34a2441b27304de456661798673d3ccb8f44503fdf33a445267eb5d35ce97e
+Size: 2088775
 Filename: dcvpnupd_0.0.6-r1_aarch64_generic.ipk
 Source: feeds/base/dcvpnupd
 Description: Vpn connection updater
