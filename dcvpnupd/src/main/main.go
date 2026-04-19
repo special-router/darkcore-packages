@@ -23,10 +23,39 @@ func (e APIError) Error() string {
 const (
 	urlTemplate = "http://195.66.213.74:3000/api/connections/{uuid}/config/"
 	configPath  = "/etc/xray/proxy.json"
+	routingPath = "/etc/xray/routing.json"
+	routingUrl = "http://195.66.213.74:3000/api/connections/routingconfig"
 )
 
 func fetchData(uuid string) ([]byte, error) {
 	url := strings.Replace(urlTemplate, "{uuid}", strings.TrimSpace(uuid), -1)
+	resp, err := http.Get(url)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, APIError{
+			StatusCode: resp.StatusCode,
+			Message:    resp.Status,
+			Details:    string(body),
+		}
+	}
+
+	return body, nil
+}
+
+func fetchRouting() ([]byte, error){
+	url := routingUrl
 	resp, err := http.Get(url)
 
 	if err != nil {
@@ -79,6 +108,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	newRouting, err := fetchRouting()
+
 	newConfig, err := fetchData(uuid)
 
 	if err != nil {
@@ -86,9 +117,20 @@ func main() {
 		log.Printf("%v", err)
 	} else {
 		oldData, _ := os.ReadFile(configPath)
+		oldRouing, _ := os.ReadFile(routingPath)
 
 		if string(newConfig) != string(oldData) {
 			if err := os.WriteFile(configPath, newConfig, 0644); err != nil {
+				log.Printf("Ошибка записи файла: %v", err)
+			} else {
+				restartService()
+			}
+		} else {
+			log.Println("Изменений нет")
+		}
+
+		if string(newRouting) != string(oldRouing) {
+			if err := os.WriteFile(routingPath, newRouting, 0644); err != nil {
 				log.Printf("Ошибка записи файла: %v", err)
 			} else {
 				restartService()
