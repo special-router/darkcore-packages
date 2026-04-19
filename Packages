@@ -37,14 +37,14 @@ Version: 0.0.7-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: c322fc60d42a1f92d9d3d05ca72428a71a01036a2f5e7e092de79f2155f7719c
-Size: 2088775
+SHA256sum: 95c770d6ee6c857311d8a63d513ea415812212570ddf5d95208461ecc74cb94d
+Size: 2089598
 Filename: dcvpnupd_0.0.7-r1_aarch64_generic.ipk
 Source: feeds/base/dcvpnupd
 Description: Vpn connection updater
 SourceName: dcvpnupd
 SourceDateEpoch: 1760891865
-Installed-Size: 4997120
+Installed-Size: 5068800
 
 
 Package: geoupdate
