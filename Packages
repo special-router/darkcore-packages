@@ -33,13 +33,13 @@ Installed-Size: 27637760
 
 
 Package: dcvpnupd
-Version: 0.0.7-r1
+Version: 0.0.8-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: 95c770d6ee6c857311d8a63d513ea415812212570ddf5d95208461ecc74cb94d
-Size: 2089598
-Filename: dcvpnupd_0.0.7-r1_aarch64_generic.ipk
+SHA256sum: 09664931d3e0389fbdcc066c2e21eb159be0175dc27c0eee7cca9712f8c43ae9
+Size: 2089599
+Filename: dcvpnupd_0.0.8-r1_aarch64_generic.ipk
 Source: feeds/base/dcvpnupd
 Description: Vpn connection updater
 SourceName: dcvpnupd
