@@ -108,35 +108,52 @@ func main() {
 		os.Exit(1)
 	}
 
-	newRouting, err := fetchRouting()
+	// Ошибки двух загрузок держатся раздельно: раньше вторая перетирала первую,
+	// и недоступный routing выглядел как успех. Тогда newRouting был пустым, не
+	// совпадал с файлом на диске — и роутер записывал пустой routing.json, после
+	// чего перезапускал xray. Устройство теряло маршрутизацию из-за того, что
+	// сервер минуту не отвечал.
+	newRouting, routingErr := fetchRouting()
 
-	newConfig, err := fetchData(uuid)
+	newConfig, configErr := fetchData(uuid)
 
-	if err != nil {
-		log.Printf("Ошибка загрузки JSON")
-		log.Printf("%v", err)
+	if configErr != nil {
+		log.Printf("Ошибка загрузки конфигурации")
+		log.Printf("%v", configErr)
 	} else {
-		oldData, _ := os.ReadFile(configPath)
-		oldRouing, _ := os.ReadFile(routingPath)
-
-		if string(newConfig) != string(oldData) {
-			if err := os.WriteFile(configPath, newConfig, 0644); err != nil {
-				log.Printf("Ошибка записи файла: %v", err)
-			} else {
-				restartService()
-			}
-		} else {
-			log.Println("Изменений нет")
-		}
-
-		if string(newRouting) != string(oldRouing) {
-			if err := os.WriteFile(routingPath, newRouting, 0644); err != nil {
-				log.Printf("Ошибка записи файла: %v", err)
-			} else {
-				restartService()
-			}
-		} else {
-			log.Println("Изменений нет")
-		}
+		writeIfChanged(configPath, newConfig)
 	}
+
+	if routingErr != nil {
+		log.Printf("Ошибка загрузки маршрутизации")
+		log.Printf("%v", routingErr)
+	} else {
+		writeIfChanged(routingPath, newRouting)
+	}
+}
+
+// writeIfChanged перезаписывает файл только осмысленным содержимым.
+//
+// Пустой ответ отбрасывается: единственное, чем он может стать на диске, —
+// конфигурация, с которой xray не поднимется, а старая к тому моменту уже
+// затёрта. Сохранить прежнюю рабочую копию всегда лучше.
+func writeIfChanged(path string, data []byte) {
+	if len(data) == 0 {
+		log.Printf("Пустой ответ для %s, файл не тронут", path)
+		return
+	}
+
+	old, _ := os.ReadFile(path)
+
+	if string(data) == string(old) {
+		log.Println("Изменений нет")
+		return
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		log.Printf("Ошибка записи файла: %v", err)
+		return
+	}
+
+	restartService()
 }
