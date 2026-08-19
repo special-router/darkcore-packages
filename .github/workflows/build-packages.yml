@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd, darkcore-provision ]
+        pkg: [ darkcore-xray, darkcore-main, dcvpnupd, darkcore-provision ]
       fail-fast: false
 
     steps:
