@@ -111,7 +111,10 @@ func postLiveness(ctx context.Context, uuid, token string, payload []byte) error
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	// The endpoint answers 204 on a normal accepted report -- there is no
+	// body to send back for a fire-and-forget write. 200/201 stay accepted
+	// too in case that ever changes without this client being updated first.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
 		return APIError{
 			StatusCode: resp.StatusCode,
 			Message:    resp.Status,
