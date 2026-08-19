@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd ]
+        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd, darkcore-provision ]
       fail-fast: false
 
     steps:
@@ -77,7 +77,7 @@ jobs:
           merge-multiple: true
 
       - name: Setup opkg-utils from Yocto
-        run: git clone --depth 1 git://git.yoctoproject.org/opkg-utils || echo "Clone failed"
+        run: git clone --depth 1 https://git.yoctoproject.org/opkg-utils
 
       - name: Checkout feed branch
         uses: actions/checkout@v4
