@@ -3,12 +3,27 @@ Version: 1.0.0-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: f9d4652419a6c3914f5450cb538df98018da27dcc8b201a3e41071ddeafc05eb
-Size: 882
+SHA256sum: f800e56de14b69f6363a4f8ac111d46ece1d7a30a543d935a63c1edb470ab27e
+Size: 1286
 Filename: darkcore-main_1.0.0-r1_aarch64_generic.ipk
 Source: feeds/base/darkcore-main
 Description: Darkcore Main
 SourceName: darkcore-main
+SourceDateEpoch: 1760891865
+Installed-Size: 10240
+
+
+Package: darkcore-provision
+Version: 1.0.0-r1
+Depends: libc, curl
+Section: utils
+Architecture: aarch64_generic
+SHA256sum: 831bf15dcd822b9016b066d8f947b4428d26ffc4992062938becac9fe97e9b2b
+Size: 2617
+Filename: darkcore-provision_1.0.0-r1_aarch64_generic.ipk
+Source: feeds/base/darkcore-provision
+Description: Darkcore first-boot self-registration
+SourceName: darkcore-provision
 SourceDateEpoch: 1760891865
 Installed-Size: 10240
 
@@ -19,8 +34,8 @@ Depends: libc, ca-bundle
 Section: net
 Architecture: aarch64_generic
 Maintainer: Tianling Shen <cnsztl@immortalwrt.org>
-SHA256sum: 4437b373c6c5551c3a38e843aad9962ef1725b19114a47c17875a9b7d1a74dc5
-Size: 9841506
+SHA256sum: 1c91fb11d06ed32aa80cfa9b371f2b68e55506a178ba42546c94137bab928ad9
+Size: 9841402
 Filename: darkcore-xray_1.0.3-r1_aarch64_generic.ipk
 Source: feeds/base/darkcore-xray
 Description: Xray, Penetrates Everything. It helps you to build your own computer network.
@@ -33,13 +48,13 @@ Installed-Size: 27637760
 
 
 Package: dcvpnupd
-Version: 0.0.8-r1
+Version: 0.0.9-r1
 Depends: libc
 Section: utils
 Architecture: aarch64_generic
-SHA256sum: 09664931d3e0389fbdcc066c2e21eb159be0175dc27c0eee7cca9712f8c43ae9
-Size: 2089599
-Filename: dcvpnupd_0.0.8-r1_aarch64_generic.ipk
+SHA256sum: 5ed080cf18c8df73bb2ba3d92d618e53b4749b00b710ba4912b504b4ed44af63
+Size: 2089584
+Filename: dcvpnupd_0.0.9-r1_aarch64_generic.ipk
 Source: feeds/base/dcvpnupd
 Description: Vpn connection updater
 SourceName: dcvpnupd
