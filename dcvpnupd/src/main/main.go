@@ -130,6 +130,8 @@ func main() {
 	} else {
 		writeIfChanged(routingPath, newRouting)
 	}
+
+	reportLiveness(uuid)
 }
 
 // writeIfChanged перезаписывает файл только осмысленным содержимым.
