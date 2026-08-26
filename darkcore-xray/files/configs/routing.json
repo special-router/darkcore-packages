@@ -2,6 +2,15 @@
   "routing": {
     "domainMatcher": "mph",
     "domainStrategy": "IPIfNonMatch",
+    "balancers": [
+      {
+        "tag": "proxy-balancer",
+        "selector": ["proxy"],
+        "strategy": {
+          "type": "leastPing"
+        }
+      }
+    ],
     "rules": [
       {
         "type": "field",
@@ -18,12 +27,27 @@
       {
         "type": "field",
         "ip": ["1.1.1.1", "8.8.8.8"],
-        "outboundTag": "proxy"
+        "balancerTag": "proxy-balancer"
       },
       {
         "type": "field",
         "ip": ["195.66.213.120"],
         "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "domain": ["regexp:\\.ru$"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": ["geoip:ru"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "balancerTag": "proxy-balancer"
       }
     ]
   }

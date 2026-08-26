@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd ]
+        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd, darkcore-provision ]
       fail-fast: false
 
     steps:
@@ -21,9 +21,12 @@ jobs:
 
       - name: Build env on ubuntu
         run: |
-          wget https://raw.githubusercontent.com/friendlyarm/build-env-on-ubuntu-bionic/master/install.sh
-          chmod 755 install.sh
-          ./install.sh
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3-setuptools python3-dev \
+            python3-pyelftools libelf-dev rsync swig unzip zlib1g-dev file wget \
+            zstd time pkg-config subversion xmlto uuid-dev libglib2.0-dev
 
       - name: Download OpenWrt SDK
         run: |
@@ -77,7 +80,7 @@ jobs:
           merge-multiple: true
 
       - name: Setup opkg-utils from Yocto
-        run: git clone --depth 1 git://git.yoctoproject.org/opkg-utils || echo "Clone failed"
+        run: git clone --depth 1 https://git.yoctoproject.org/opkg-utils
 
       - name: Checkout feed branch
         uses: actions/checkout@v4
