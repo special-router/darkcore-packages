@@ -24,9 +24,27 @@ GO_PKG_BUILD_PKG:=github.com/xtls/xray-core/main
 GO_PKG_LDFLAGS_X:= \
 	$(GO_PKG)/core.build=OpenWrt \
 	$(GO_PKG)/core.version=$(XRAY_VERSION)
+GO_PKG_INSTALL_EXTRA:=vendor/modules.txt
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
+
+# Xray-core's go.sum is complete (verified via `go mod tidy` producing no
+# changes), but OpenWrt's golang-build.sh resolves the build package by
+# `cd`-ing into a GOPATH-style dir with no go.mod and invoking `go list`/
+# `go install` on the bare import path. Under that invocation style, Go's
+# lazy/pruned module graph loading intermittently fails to see subpackages
+# of otherwise-already-required modules (seen for google.golang.org/protobuf,
+# github.com/sagernet/sing, github.com/refraction-networking/utls -- all
+# recently split into new "internal" subpackages) with
+# "no required module provides package X; to add it: go get X", even though
+# the module and package are present and checksum-valid in the module cache.
+# Vendoring sidesteps module-graph loading entirely: Go builds directly from
+# vendor/ using vendor/modules.txt, no lazy graph resolution involved.
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	( cd $(PKG_BUILD_DIR) && $(GO_PKG_VARS) PATH="$(STAGING_DIR_HOSTPKG)/bin:$(PATH)" go mod vendor )
+endef
 
 define Package/darkcore-xray
   TITLE:=A platform for building proxies to bypass network restrictions
