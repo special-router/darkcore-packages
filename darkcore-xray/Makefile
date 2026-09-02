@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-xray
 PKG_VERSION:=1.0.4
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 XRAY_VERSION:=25.1.30
 
@@ -24,27 +24,20 @@ GO_PKG_BUILD_PKG:=github.com/xtls/xray-core/main
 GO_PKG_LDFLAGS_X:= \
 	$(GO_PKG)/core.build=OpenWrt \
 	$(GO_PKG)/core.version=$(XRAY_VERSION)
-GO_PKG_INSTALL_EXTRA:=vendor/modules.txt
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
-# Xray-core's go.sum is complete (verified via `go mod tidy` producing no
-# changes), but OpenWrt's golang-build.sh resolves the build package by
-# `cd`-ing into a GOPATH-style dir with no go.mod and invoking `go list`/
-# `go install` on the bare import path. Under that invocation style, Go's
-# lazy/pruned module graph loading intermittently fails to see subpackages
-# of otherwise-already-required modules (seen for google.golang.org/protobuf,
-# github.com/sagernet/sing, github.com/refraction-networking/utls -- all
-# recently split into new "internal" subpackages) with
-# "no required module provides package X; to add it: go get X", even though
-# the module and package are present and checksum-valid in the module cache.
-# Vendoring sidesteps module-graph loading entirely: Go builds directly from
-# vendor/ using vendor/modules.txt, no lazy graph resolution involved.
-define Build/Prepare
-	$(call Build/Prepare/Default)
-	( cd $(PKG_BUILD_DIR) && $(GO_PKG_VARS) PATH="$(STAGING_DIR_HOSTPKG)/bin:$(PATH)" go mod vendor )
-endef
+# Build is identical to the stock feeds/packages/net/xray-core recipe: plain
+# golang-package.mk module-mode build against the go.sum-populated module
+# cache. An earlier fork carried a `go mod vendor` step in Build/Prepare to
+# work around a "no required module provides package X" failure; that turned
+# out to be an incomplete module cache (truncated `go mod download`, usually
+# GitHub rate-limiting on the build host), and `go mod vendor` itself hit the
+# same pruned-graph miss - it produced empty vendor/.../internal/ package
+# dirs, so the build then failed with "import lookup disabled by -mod=vendor".
+# Keep this in sync with upstream xray-core; if module download fails, fix the
+# network / use a token, don't re-add vendoring.
 
 define Package/darkcore-xray
   TITLE:=A platform for building proxies to bypass network restrictions
