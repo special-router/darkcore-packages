@@ -173,10 +173,9 @@ atomic (нет temp+rename).
 `dcvpnupd/src/main/main.go`). Переопределяется через
 `uci set darkcore.main.api_base=...` без пересборки.
 
-**Открытый вопрос к владельцу API:** нужен ли на `GET .../config/`
-заголовок авторизации? Старый endpoint не требовал — сейчас `fetchConfig`
-шлёт голый `http.Get`. Если новый API требует токен — добавить заголовок
-(и вернуть какой-то UCI-ключ для него).
+Заголовок авторизации не нужен: сам UUID в пути — секрет и признак
+реального устройства. `fetchConfig` шлёт голый `http.Get` (так же, как
+старый endpoint).
 
 История адресов: `195.66.213.74:3000` → `201.34.132.118:3000/api/connections`
 → `https://sub.special-wifi.ru/api/v1/vpn/box/<uuid>/config/`.
