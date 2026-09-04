@@ -47,7 +47,9 @@ jobs:
       - name: Extract SDK
         run: |
           tar xf "${SDK_FILE}"
-          mv openwrt-sdk-* openwrt-sdk
+          # trailing slash: match only the extracted dir, not the (cached)
+          # tarball sitting next to it.
+          mv openwrt-sdk-*/ openwrt-sdk
 
       # dl/ holds the xray-core source tarball and the Go module cache
       # (GO_MOD_CACHE_DIR = dl/go-mod-cache); go-build/ is the Go build cache.
