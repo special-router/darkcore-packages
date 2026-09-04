@@ -1,0 +1,11 @@
+{
+  "burstObservatory": {
+    "subjectSelector": ["proxy"],
+    "pingConfig": {
+      "destination": "https://www.gstatic.com/generate_204",
+      "interval": "30s",
+      "timeout": "10s",
+      "sampling": 3
+    }
+  }
+}

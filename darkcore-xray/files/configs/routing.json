@@ -8,7 +8,8 @@
         "selector": ["proxy"],
         "strategy": {
           "type": "leastPing"
-        }
+        },
+        "fallbackTag": "direct"
       }
     ],
     "rules": [
@@ -26,13 +27,13 @@
       },
       {
         "type": "field",
-        "ip": ["1.1.1.1", "8.8.8.8"],
-        "balancerTag": "proxy-balancer"
+        "domain": ["full:sub.special-wifi.ru"],
+        "outboundTag": "direct"
       },
       {
         "type": "field",
-        "ip": ["195.66.213.120"],
-        "outboundTag": "direct"
+        "ip": ["1.1.1.1", "8.8.8.8"],
+        "balancerTag": "proxy-balancer"
       },
       {
         "type": "field",
