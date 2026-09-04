@@ -21,41 +21,27 @@ func (e APIError) Error() string {
 }
 
 const (
-	urlTemplate = "http://201.34.132.118:3000/api/connections/{uuid}/config/"
-	configPath  = "/etc/xray/proxy.json"
-	routingPath = "/etc/xray/routing.json"
-	routingUrl = "http://201.34.132.118:3000/api/connections/routingconfig"
+	// Базовый адрес backend по умолчанию. Переопределяется без пересборки
+	// через `uci set darkcore.main.api_base=...` (см. getAPIBase).
+	defaultAPIBase = "https://sub.special-wifi.ru"
+	configPath     = "/etc/xray/proxy.json"
 )
 
-func fetchData(uuid string) ([]byte, error) {
-	url := strings.Replace(urlTemplate, "{uuid}", strings.TrimSpace(uuid), -1)
-	resp, err := http.Get(url)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, APIError{
-			StatusCode: resp.StatusCode,
-			Message:    resp.Status,
-			Details:    string(body),
+// getAPIBase: сперва UCI darkcore.main.api_base, иначе вкомпилированный
+// дефолт. Партию плат можно перевести на другой сервер одним `uci set`,
+// без пересборки dcvpnupd.
+func getAPIBase() string {
+	out, err := exec.Command("uci", "-q", "get", "darkcore.main.api_base").Output()
+	if err == nil {
+		if base := strings.TrimSpace(string(out)); base != "" {
+			return base
 		}
 	}
-
-	return body, nil
+	return defaultAPIBase
 }
 
-func fetchRouting() ([]byte, error){
-	url := routingUrl
+func fetchConfig(base, uuid string) ([]byte, error) {
+	url := strings.TrimSuffix(base, "/") + "/api/v1/vpn/box/" + uuid + "/config/"
 	resp, err := http.Get(url)
 
 	if err != nil {
@@ -97,7 +83,7 @@ func getUuid() (string, error) {
 		return "", err
 	}
 
-	return string(uuidBytes), nil
+	return strings.TrimSpace(string(uuidBytes)), nil
 }
 
 func main() {
@@ -108,30 +94,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Ошибки двух загрузок держатся раздельно: раньше вторая перетирала первую,
-	// и недоступный routing выглядел как успех. Тогда newRouting был пустым, не
-	// совпадал с файлом на диске — и роутер записывал пустой routing.json, после
-	// чего перезапускал xray. Устройство теряло маршрутизацию из-за того, что
-	// сервер минуту не отвечал.
-	newRouting, routingErr := fetchRouting()
-
-	newConfig, configErr := fetchData(uuid)
+	newConfig, configErr := fetchConfig(getAPIBase(), uuid)
 
 	if configErr != nil {
 		log.Printf("Ошибка загрузки конфигурации")
 		log.Printf("%v", configErr)
-	} else {
-		writeIfChanged(configPath, newConfig)
+		return
 	}
 
-	if routingErr != nil {
-		log.Printf("Ошибка загрузки маршрутизации")
-		log.Printf("%v", routingErr)
-	} else {
-		writeIfChanged(routingPath, newRouting)
-	}
-
-	reportLiveness(uuid)
+	writeIfChanged(configPath, newConfig)
 }
 
 // writeIfChanged перезаписывает файл только осмысленным содержимым.

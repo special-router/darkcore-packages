@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dcvpnupd
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=local
@@ -22,7 +22,9 @@ define Package/dcvpnupd
 	SECTION:=utils
 	CATEGORY:=DarkCore
 	TITLE:=Vpn connection updater
-	DEPENDS:=$(GO_ARCH_DEPENDS)
+	# +ca-bundle: backend теперь HTTPS, Go на musl читает
+	# /etc/ssl/certs/ca-certificates.crt из этого пакета.
+	DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle
 endef
 
 define Build/Prepare
