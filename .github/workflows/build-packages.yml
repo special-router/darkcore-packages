@@ -6,14 +6,14 @@ on:
 env:
   ARTIFACT_DIR: "artifacts"
   BUILD_DATE: ""
+  # OpenWrt SDK for the target these packages ship to.
+  SDK_FILE: "openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+  SDK_URL_BASE: "https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8"
+  PKGS: "geoupdate darkcore-xray darkcore-main dcvpnupd"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        pkg: [ geoupdate, darkcore-xray, darkcore-main, dcvpnupd ]
-      fail-fast: false
 
     steps:
       - name: Checkout source
@@ -28,39 +28,76 @@ jobs:
             python3-pyelftools libelf-dev rsync swig unzip zlib1g-dev file wget \
             zstd time pkg-config subversion xmlto uuid-dev libglib2.0-dev
 
+      # The SDK tarball never changes for a given SDK_FILE, so a static key
+      # means it is downloaded at most once ever.
+      - name: Cache OpenWrt SDK tarball
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SDK_FILE }}
+          key: sdk-${{ env.SDK_FILE }}
+
       - name: Download OpenWrt SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: |
-          wget https://mirror-03.infra.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          tar xf openwrt-sdk-*.tar.zst
-          rm openwrt-sdk-*.tar.zst
+          # downloads.openwrt.org is the round-robin CDN, not a single mirror.
+          wget --tries=5 --retry-connrefused --waitretry=15 --timeout=30 \
+            -O "${SDK_FILE}" "${SDK_URL_BASE}/${SDK_FILE}"
+
+      - name: Extract SDK
+        run: |
+          tar xf "${SDK_FILE}"
           mv openwrt-sdk-* openwrt-sdk
 
-      - name: Copy ${{ matrix.pkg }}
+      # dl/ holds the xray-core source tarball and the Go module cache
+      # (GO_MOD_CACHE_DIR = dl/go-mod-cache); go-build/ is the Go build cache.
+      # Without this, darkcore-xray recompiles all of xray-core every run.
+      - name: Cache build downloads and Go cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt-sdk/dl
+            openwrt-sdk/tmp/go-build
+          key: builddl-${{ env.SDK_FILE }}-${{ hashFiles('*/Makefile', '*/src/go.mod', '*/src/go.sum') }}
+          restore-keys: |
+            builddl-${{ env.SDK_FILE }}-
+
+      - name: Copy packages into SDK
         run: |
-          cp -r ${{ matrix.pkg }} openwrt-sdk/package/${{ matrix.pkg }}
+          for p in ${PKGS}; do
+            cp -r "$p" "openwrt-sdk/package/$p"
+          done
 
       - name: Install feeds
         run: |
           cd openwrt-sdk
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          # Only the packages feed is needed (golang/host, Go runtime deps);
+          # ca-bundle is a core package. Skips the slow, flaky clones of
+          # luci/routing/telephony from git.openwrt.org.
+          ./scripts/feeds update packages
+          ./scripts/feeds install -a -p packages
           make defconfig
 
-      - name: Build ${{ matrix.pkg }}
+      - name: Build packages
         run: |
           cd openwrt-sdk
-          make package/${{ matrix.pkg }}/compile V=sc
+          for p in ${PKGS}; do
+            make -j"$(nproc)" "package/$p/compile" V=s
+          done
 
-      - name: Process IPK
+      - name: Collect IPKs
         run: |
-          mkdir -p "${{ env.ARTIFACT_DIR }}"
-          ls -laR openwrt-sdk/bin/packages
-          cp -p openwrt-sdk/bin/packages/*/base/${{ matrix.pkg }}*.ipk "${{ env.ARTIFACT_DIR }}"
+          mkdir -p "${ARTIFACT_DIR}"
+          ls -laR openwrt-sdk/bin/packages || true
+          for p in ${PKGS}; do
+            cp -p openwrt-sdk/bin/packages/*/base/${p}_*.ipk "${ARTIFACT_DIR}/"
+          done
+          ls -l "${ARTIFACT_DIR}"
 
-      - name: Upload IPK
+      - name: Upload IPKs
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.pkg }}-ipk
+          name: darkcore-ipks
           path: ${{ env.ARTIFACT_DIR }}/*
 
   release:
@@ -79,24 +116,25 @@ jobs:
           path: ${{ env.ARTIFACT_DIR }}
           merge-multiple: true
 
-      - name: Setup opkg-utils from Yocto
-        run: git clone --depth 1 https://git.yoctoproject.org/opkg-utils
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          # signify-openbsd uses the same key/signature format as OpenWrt's
+          # usign, so it verifies the feed the same way - and it drops a
+          # flaky git clone + cmake build of usign.
+          sudo apt-get install -y --no-install-recommends signify-openbsd
+          # opkg-utils: prefer the distro package; fall back to upstream.
+          sudo apt-get install -y --no-install-recommends opkg-utils || true
+          if ! command -v opkg-make-index >/dev/null; then
+            git clone --depth 1 https://git.yoctoproject.org/opkg-utils
+            echo "$PWD/opkg-utils" >> "$GITHUB_PATH"
+          fi
 
       - name: Checkout feed branch
         uses: actions/checkout@v4
         with:
           ref: feed
           path: feed
-
-      - name: Setup Usign
-        run: |
-          git clone https://git.openwrt.org/project/usign.git
-          cd usign
-          mkdir build
-          cd build
-          cmake ..
-          make
-          make install
 
       - name: Restore usign private key
         env:
@@ -110,22 +148,22 @@ jobs:
         run: |
           rm -rf feed/*.ipk feed/Packages*
           cp -p ${{ env.ARTIFACT_DIR }}/*.ipk feed
-          
+
           n=0
-          until opkg-utils/opkg-make-index -a -f -v --checksum sha256 feed > feed/Packages || [ $n -ge 3 ]; do
-          echo "Indexing failed, retrying... ($((++n)))"
-          sleep 2
+          until opkg-make-index -a -f -v --checksum sha256 feed > feed/Packages || [ $n -ge 3 ]; do
+            echo "Indexing failed, retrying... ($((++n)))"
+            sleep 2
           done
-          
+
           gzip -kf feed/Packages > feed/Packages.gz
-          
+
           file feed/Packages
           file key-build.sec
-          
-          usign -S -m feed/Packages -s key-build.sec -x feed/Packages.sig
-          
+
+          signify-openbsd -S -m feed/Packages -s key-build.sec -x feed/Packages.sig
+
           ls -l feed/
-          
+
           generate_tbody() {
             echo "          <tbody>"
             for file in feed/Packages* feed/*.ipk; do
@@ -141,9 +179,9 @@ jobs:
             done
             echo "          </tbody>"
           }
-          
+
           generate_tbody > feed/tbody.tmp
-          
+
           sed -i '/<!-- tbody-anchor -->/,/<!-- end-tbody-anchor -->/ {
             /<!-- tbody-anchor -->/!{
               /<!-- end-tbody-anchor -->/!d
