@@ -12,8 +12,8 @@ OpenWrt/FriendlyWrt package feed с **backend-компонентами** про�
 
 Здесь только UCI-конфиги, init-скрипты и Go-бинарники. **LuCI-приложения
 / темы здесь нет** — оно живёт отдельным пакетом в
-`darkcorewrt/packages/luci-app-darkcore` (страница ввода UUID + статус
-xray + брендинг).
+`darkcorewrt/packages/luci-app-darkcore` (страница ввода кода активации +
+статус xray + брендинг).
 
 ---
 
