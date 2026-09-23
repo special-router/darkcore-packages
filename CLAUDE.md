@@ -120,24 +120,59 @@ watchdog в `xray.init`, снимающий nft-правила если xray н�
 ## `dcvpnupd`
 
 Go, `PKG_SOURCE_PROTO:=local` (из `src/`), **stdlib-only** (после
-удаления liveness/grpc — коммит `5758155`). `DEPENDS: $(GO_ARCH_DEPENDS)
-+ca-bundle`. Ставит `/usr/bin/dcvpnupd`. Cron `*/5 * * * * dcvpnupd`
-добавляет `darkcorewrt/build.sh` (`add_scripts`).
+удаления liveness/grpc — коммит `5758155`; JSON-обмен для активации —
+`encoding/json`, тоже stdlib). `DEPENDS: $(GO_ARCH_DEPENDS) +ca-bundle`.
+Ставит `/usr/bin/dcvpnupd`. Cron `*/5 * * * * dcvpnupd` добавляет
+`darkcorewrt/build.sh` (`add_scripts`).
 
-`src/main/main.go` — весь control flow:
-1. `getUuid()` = `uci get darkcore.main.uuid`, `TrimSpace`. Пусто/ошибка
-   → `os.Exit(1)`.
-2. `getAPIBase()` = `uci -q get darkcore.main.api_base`, иначе
-   `defaultAPIBase` (`https://sub.special-wifi.ru`).
-3. `fetchConfig(base, uuid)` — `GET <base>/api/v1/vpn/box/<uuid>/config/`
-   (без auth-заголовка, как и раньше). Не 200 → `APIError`, лог, выход.
-4. `writeIfChanged("/etc/xray/proxy.json", body)` — пустой ответ
-   отбрасывает; при изменении файла — `os.WriteFile` +
-   `service xray restart`.
+**2026-09: миграция с UUID на код активации** (backend сменился на
+`special-wifi.link`, целевой сервис — sing-box вместо xray). UUID больше
+не используется. `src/main/main.go` — весь control flow:
+
+1. `ensureActivated()` — сперва пробует `darkcore.main.device_token` +
+   `darkcore.main.config_url` из UCI (`uci -q get`, так что отсутствие
+   ключа — не ошибка). Если оба есть — отдаёт их как есть (обычный путь
+   при каждом прогоне крона).
+2. Если токена нет — читает `darkcore.main.activation_code`. Пусто →
+   лог «не активировано», `os.Exit(1)`. Есть → `activate(base, code)`:
+   `POST <base>/api/v1/vpn/router/activate/` с `{"code": "..."}`, ответ
+   `{"device_token": "...", "config_url": "..."}`. Не 200 или пустые
+   поля → ошибка, выход.
+3. После успешной активации — `uci set` для `device_token`/`config_url`,
+   `uci set darkcore.main.activation_code=''` (код одноразовый, чтобы не
+   переактивироваться на следующем прогоне крона) и `uci commit
+   darkcore`.
+4. `fetchConfig(configURL, deviceToken)` — `GET <config_url>` с
+   `Authorization: Bearer <device_token>`. Не 200 → `APIError`, лог,
+   выход.
+5. `writeIfChanged(configPath, body)` — пустой ответ отбрасывает; при
+   изменении файла — `os.WriteFile` + `service <targetService> restart`.
+
+`getAPIBase()` не изменился по форме: `darkcore.main.api_base`, иначе
+вкомпилированный дефолт — теперь `https://special-wifi.link`.
+
+**`configPath`/`targetService` — провизорные константы**
+(`/etc/sing-box/proxy.json`, `sing-box`): в `darkcore-packages` пока нет
+пакета sing-box (нет confdir, нет init-скрипта, нет `/etc/config/sing-box`
+— это отдельная задача, аналог заведения `darkcore-xray`). `config_url`
+уже отдаёт готовый JSON (`log`+`outbounds`+`route`, без `inbounds`/`dns`
+— по всей видимости sing-box, как и xray, будет мержить несколько файлов
+через `-C confdir`), так что `dcvpnupd` по-прежнему просто пишет байты
+как есть, без сборки/мержа на своей стороне.
+
+**Что не обрабатывается:** протухший/невалидный `device_token` (401 от
+`config_url`) не триггерит повторную активацию — `activation_code` к
+этому моменту уже очищен и нового взять неоткуда без участия
+пользователя. Если это окажется реальным сценарием — понадобится
+отдельный сигнал «токен отозван» с backend или ручной ввод нового кода
+через LuCI.
 
 `ucitrack`: `darkcorewrt/packages/luci-app-darkcore` регистрирует
 `ucitrack.@darkcore[-1].exec='/usr/bin/dcvpnupd'`, чтобы «Save & Apply»
-на LuCI-странице прогонял `dcvpnupd` сразу.
+на LuCI-странице (ввод кода активации) прогонял `dcvpnupd` сразу — тем
+самым активация происходит немедленно, а не ждёт следующего тика крона.
+UCI-схема (`activation_code` и то, что её вводит LuCI) заводится в
+`darkcorewrt` — вне `dcvpnupd`.
 
 **Что убрано (`5758155`):** `fetchRouting()` / `routingUrl` /
 `routingPath` (routing теперь статикой в `darkcore-xray`); `liveness.go` +
@@ -162,23 +197,28 @@ atomic (нет temp+rename).
 
 ## Backend API
 
-Один used endpoint:
+**2026-09: старый UUID/`sub.special-wifi.ru`-flow заменён на активацию
+по одноразовому коду** (см. `dcvpnupd` выше). Два эндпоинта:
 
 | метод | путь | назначение |
 |---|---|---|
-| `GET` | `<api_base>/api/v1/vpn/box/<uuid>/config/` | → `/etc/xray/proxy.json` (per-uuid VLESS-outbound) |
+| `POST` | `<api_base>/api/v1/vpn/router/activate/` | тело `{"code": "<одноразовый код>"}` → `{"device_token": "...", "config_url": "..."}` |
+| `GET` | `<config_url>` (из ответа выше), заголовок `Authorization: Bearer <device_token>` | → `configPath` в `dcvpnupd` (готовый sing-box JSON: `log`+`outbounds`+`route`) |
 
-`api_base` по умолчанию — `https://sub.special-wifi.ru` (в двух местах:
-`darkcore-main/files/darkcore.conf` и `defaultAPIBase` в
-`dcvpnupd/src/main/main.go`). Переопределяется через
+`api_base` по умолчанию — `https://special-wifi.link` (вкомпилирован как
+`defaultAPIBase` в `dcvpnupd/src/main/main.go`; в `darkcore-main` не
+проверялось — вне скоупа этой правки). Переопределяется через
 `uci set darkcore.main.api_base=...` без пересборки.
 
-Заголовок авторизации не нужен: сам UUID в пути — секрет и признак
-реального устройства. `fetchConfig` шлёт голый `http.Get` (так же, как
-старый endpoint).
+`activate/` — без авторизации (код в теле — секрет и признак
+активации); `config_url` — с `Bearer`-токеном, полученным от `activate/`.
+`device_token`/`config_url` сохраняются в UCI после первой активации,
+`activation_code` одноразовый и чистится сразу после использования.
 
 История адресов: `195.66.213.74:3000` → `201.34.132.118:3000/api/connections`
-→ `https://sub.special-wifi.ru/api/v1/vpn/box/<uuid>/config/`.
+→ `https://sub.special-wifi.ru/api/v1/vpn/box/<uuid>/config/` (UUID-flow,
+заменён) → `https://special-wifi.link/api/v1/vpn/router/activate/` +
+per-device `config_url` (текущий, код-активации flow).
 
 ---
 
