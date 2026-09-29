@@ -309,8 +309,8 @@ per-device `config_url` (текущий, код-активации flow).
 
 - Go-пакеты — через `feeds/packages/lang/golang/golang-package.mk`. У
   `dcvpnupd`/`geoupdate` `PKG_SOURCE_PROTO:=local`, у `darkcore-singbox` —
-  тарбол sing-box с codeload (`PKG_HASH:=skip` пока не проставлен настоящий
-  sha256 — заполнить после первого успешного `make download`).
+  тарбол sing-box с codeload, `PKG_HASH` — настоящий sha256 (проставлен,
+  сверен с независимой повторной загрузкой того же тега).
 - CI `.github/workflows/build-packages.yml` (`workflow_dispatch`): список
   пакетов в `PKGS` (`geoupdate darkcore-singbox darkcore-main dcvpnupd`),
   OpenWrt SDK 24.10.4 rockchip/armv8, `make package/<pkg>/compile`,
@@ -318,10 +318,23 @@ per-device `config_url` (текущий, код-активации flow).
 - Ручная сборка через `darkcorewrt/build.sh` идёт в свежем
   `friendlywrt24-<dev>/` с новым `dl/go-mod-cache`; прерванный прогон
   оставляет частично распакованные модули → `import lookup disabled by
-  -mod=vendor` / `pattern ... no matching files found`. Лечение: снести
-  распакованные деревья в `dl/go-mod-cache` (оставив `cache/`) либо весь
-  `dl/go-mod-cache`, не прерывать прогон. (После `5758155` `dcvpnupd`
-  stdlib-only — эта боль остаётся только у `darkcore-singbox`.)
+  -mod=vendor` / `pattern ... no matching files found`. Лечение (если
+  всё же понадобится вручную): снести распакованные деревья в
+  `dl/go-mod-cache` (оставив `cache/`) либо весь `dl/go-mod-cache`, не
+  прерывать прогон.
+  **2026-09-29, разобрано на реальном железе — три РАЗНЫХ источника
+  этой боли, все теперь фиксятся автоматически в `darkcorewrt/build.sh`:**
+  (1) `make -j$(nproc)` на 15GB/8-core машине ловил OOM посреди записи
+  файла (и в `toolchain/gcc/initial`, и в Go-компиляции) — `build.sh`
+  теперь считает безопасный `-j` из RAM и nproc; (2) несколько
+  Go-пакетов (`darkcore-singbox`/`dcvpnupd`/`geoupdate` + чужие feeds)
+  параллельно бьют по общему `dl/go-mod-cache` — `build.sh` оборачивает
+  шаг `build` в `golang-build.sh` в `flock`; (3) главная причина -
+  `mk-friendlywrt.sh`'s `find dl -size -1024c -exec rm -f {} \;` (чистка
+  недокачанных архивов) без `-maxdepth 1` рекурсивно косила тысячи
+  легитимных Go-исходников <1KB внутри `dl/go-mod-cache` при каждом
+  прогоне - `build.sh` теперь патчит это на `-maxdepth 1`. Подробности и
+  обоснование каждого фикса - комментарии в `darkcorewrt/build.sh`.
 
 ## Проверка активации (на живой плате)
 
