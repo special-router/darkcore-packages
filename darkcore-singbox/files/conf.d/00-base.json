@@ -1,0 +1,39 @@
+{
+  "log": { "level": "warn", "timestamp": true },
+  "dns": {
+    "servers": [
+      { "tag": "resolver", "address": "223.5.5.5", "detour": "direct" },
+      { "tag": "doh-cloudflare", "address": "https://1.1.1.1/dns-query", "detour": "direct" }
+    ],
+    "final": "resolver",
+    "strategy": "prefer_ipv4"
+  },
+  "inbounds": [
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "::",
+      "listen_port": 12345,
+      "network": ["tcp", "udp"]
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct",
+      "routing_mark": 255
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "rules": [
+      { "inbound": ["tproxy-in"], "port": 53, "action": "hijack-dns" }
+    ]
+  }
+}

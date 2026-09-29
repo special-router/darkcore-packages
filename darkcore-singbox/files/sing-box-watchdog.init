@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+
+# Стартует на 1 позже sing-box (START=00), чтобы TPROXY-правила уже были
+# загружены к моменту первой проверки. Отдельный от sing-box процесс
+# специально: рестарт sing-box каждые 5 минут (dcvpnupd) не должен сбивать
+# состояние вотчдога, и вотчдог должен продолжать следить даже если сам
+# sing-box упал.
+START=98
+STOP=98
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance "sing-box-watchdog"
+	procd_set_param command /usr/bin/sing-box-watchdog
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
