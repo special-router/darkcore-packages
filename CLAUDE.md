@@ -122,6 +122,23 @@ Go-пакет: `sing-box` v1.12.4 (тарбол с codeload,
   `adapter/outbound/manager.go`) - то есть `direct`, тот же безопасный
   дефолт, но без явного `route.final` в базовом конфиге.
 - `/usr/share/sing-box/nftables.rulesv46`.
+- `/usr/libexec/darkcore-singbox-profile-status` (`files/
+  darkcore-singbox-profile-status.sh`) — для LuCI-страницы
+  (`darkcorewrt/packages/luci-app-darkcore`): какой VLESS-профиль сейчас
+  реально выбран группой `GLOBAL AUTO` и живой пинг до него. Читает
+  Clash API sing-box'а (`experimental.clash_api.external_controller:
+  127.0.0.1:9090` в `00-base.json`, тег сборки `with_clash_api` -
+  **проверено 2026-09-29, собирается чисто на уже имеющемся
+  go.sum.fixed**, новых модулей не нужно). Запрашивает саму группу
+  `GLOBAL AUTO`, не конкретный тег сервера (`GET /proxies/GLOBAL%20AUTO`
+  → `.now` для имени, `GET /proxies/GLOBAL%20AUTO/delay?...` для пинга) -
+  у group-outbound'ов `DialContext` делегирует текущему выбранному члену,
+  так что percent-encode нужен только для пробела в "GLOBAL AUTO", а не
+  для юникода/эмодзи в тегах отдельных серверов (было бы больно кодировать
+  побайтово в POSIX shell). Вызывается со страницы через `ubus file.exec`
+  (Clash API слушает только 127.0.0.1, из браузера не достать напрямую).
+  Если группы/профиля нет (например конфиг ещё не активирован) - отдаёт
+  `{"available":false}`, страница показывает «Нет доступных профилей».
 
 Конфиги sing-box:
 - `00-base.json` — статика, которой нет в конфиге бэкенда: `dns`

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-singbox
 PKG_VERSION:=1.11.15
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 # ВАЖНО: не поднимать выше 1.11.x без проверки. С 1.12.0 sing-box перешёл
 # на форк github.com/metacubex/utls, который через common/badtls тянет
@@ -57,17 +57,23 @@ GO_PKG_LDFLAGS_X:=$(GO_PKG)/constant.Version=$(SINGBOX_VERSION)
 # with_utls обязателен: vless-outbound'ы, которые отдаёт бэкенд, используют
 # tls.utls.enabled + tls.reality.enabled - без тега TLS-хендшейк не пройдёт.
 #
-# НЕ добавлять with_quic/with_clash_api "про запас": у sing-box ленивый граф
-# модулей (lazy module graph), go.sum считает хэши только для того, что
-# реально импортируется при активных тегах. with_quic/with_clash_api тянут
-# github.com/sagernet/quic-go, github.com/quic-go/qpack, github.com/sagernet/
-# nftables (internal/parseexprfunc), metacubex/utls internal-пакеты,
-# sing-shadowsocks2, sing-anytls и т.д. - их граф не досчитан в шипованном
-# go.sum, сборка падает с "no required module provides package X" по всему
-# дереву. В текущем конфиге бэкенда нет ни одного QUIC/Hysteria-транспорта и
-# Clash API не используется - добавлять эти теги, только когда они реально
-# понадобятся, и сразу проверять сборку.
-GO_PKG_TAGS:=with_utls
+# НЕ добавлять with_quic "про запас": у sing-box ленивый граф модулей
+# (lazy module graph), go.sum считает хэши только для того, что реально
+# импортируется при активных тегах. with_quic тянет github.com/sagernet/
+# quic-go, github.com/quic-go/qpack и т.д. - их граф не досчитан в
+# шипованном go.sum, сборка падает с "no required module provides
+# package X" по всему дереву. В текущем конфиге бэкенда нет ни одного
+# QUIC/Hysteria-транспорта - добавлять тег, только когда он реально
+# понадобится, и сразу проверять сборку.
+#
+# with_clash_api, наоборот, ПРОВЕРЕН (2026-09-29): собирается чисто на
+# уже имеющемся go.sum.fixed, новых модулей не требует (видимо,
+# go-chi/chi/v5 и остальное, что ему нужно, уже и так в графе через
+# with_utls). Нужен для страницы статуса в LuCI - показывает, какой
+# VLESS-профиль сейчас реально выбран `GLOBAL AUTO` и пинг до него
+# (см. darkcore-singbox-profile-status в files/, experimental.clash_api
+# в files/conf.d/00-base.json).
+GO_PKG_TAGS:=with_utls with_clash_api
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
@@ -86,7 +92,7 @@ define Package/darkcore-singbox
   SECTION:=net
   CATEGORY:=DarkCore
   URL:=https://sing-box.sagernet.org
-  DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +kmod-inet-diag
+  DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +kmod-inet-diag +curl
 endef
 
 define Package/darkcore-singbox/description
@@ -105,6 +111,9 @@ define Package/darkcore-singbox/install
 	$(INSTALL_DIR) $(1)/usr/bin/
 	$(INSTALL_BIN) $(GO_PKG_BUILD_BIN_DIR)/sing-box $(1)/usr/bin/sing-box
 	$(INSTALL_BIN) $(CURDIR)/files/sing-box-watchdog.sh $(1)/usr/bin/sing-box-watchdog
+
+	$(INSTALL_DIR) $(1)/usr/libexec/
+	$(INSTALL_BIN) $(CURDIR)/files/darkcore-singbox-profile-status.sh $(1)/usr/libexec/darkcore-singbox-profile-status
 
 	$(INSTALL_DIR) $(1)/etc/config/
 	$(INSTALL_CONF) $(CURDIR)/files/sing-box.conf $(1)/etc/config/sing-box
