@@ -84,7 +84,22 @@ Go-пакет: `sing-box` v1.12.4 (тарбол с codeload,
 - `/etc/config/sing-box` (`files/sing-box.conf`) — `enabled '1'`,
   `user 'root'` (TPROXY + policy routing требуют root, как и у xray),
   `confdir '/etc/sing-box/conf.d'`, `workdir '/usr/share/sing-box'`.
-- `/etc/init.d/sing-box` (`files/sing-box.init`) — procd, `START=00`,
+- `/etc/init.d/sing-box` (`files/sing-box.init`) — procd, `START=99`
+  (**было `START=00` - критичный баг, найден 2026-09-29 на реальном
+  железе**: при `00` скрипт запускался ПЕРВЫМ вообще из всех
+  `/etc/rc.d/S*` - раньше `fstab`(S11), `rpcd`(S12), `dnsmasq`/
+  `dropbear`(S19), `network`(S20). `start_service` делает `ip rule`/
+  `ip route`/`nft -f`/`procd_open_instance` - последнее общается с procd
+  через ubus, который в это время ещё не факт что готов принимать
+  запросы (rpcd/ubus только на S12). Результат - весь boot-sequence
+  вставал колом на этом шаге (OpenWrt гоняет `/etc/rc.d/S*` строго
+  последовательно), `dropbear`/`uhttpd` не поднимались НИКОГДА - роутер
+  пинговался (сеть через отдельный hotplug-путь), но SSH/LuCI 100%
+  недоступны. Судя по `sing-box-watchdog`'у на `START=98` "на 1 раньше
+  sing-box" - `99` для sing-box и был исходно задуман, просто опечатка
+  при написании init-скрипта, которую не поймали раньше, т.к. до этого
+  тестировали живыми правками поверх уже загруженной системы, а не
+  полным циклом сборка→прошивка→загрузка с нуля.),
   инстанс `sing-box`. Та же policy routing, что у `xray.init` (`ip rule
   fwmark 1 → table 100`, `local 0.0.0.0/0 dev lo`,
   `default via 192.168.2.1`, best-effort `wait_for_gateway`), тот же
