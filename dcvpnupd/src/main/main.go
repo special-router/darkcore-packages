@@ -27,10 +27,14 @@ const (
 	defaultAPIBase = "https://special-wifi.link"
 	activatePath   = "/api/v1/vpn/router/activate/"
 
-	// TODO(sing-box): провизорно, пока в darkcore-packages нет пакета
-	// sing-box с собственным confdir/init-скриптом. Поправить, когда он
-	// появится.
-	configPath    = "/etc/sing-box/proxy.json"
+	// darkcore-singbox мерджит несколько *.json из этой директории через
+	// `sing-box run -C`; префикс "90-" гарантирует алфавитный порядок
+	// после статического "00-base.json" (нужно для конкатенации массивов
+	// вроде outbounds). Для скаляров вроде route.final порядок работает
+	// НАОБОРОТ - побеждает более ранний файл, поэтому "00-base.json"
+	// сознательно не задаёт route.final сам, оставляя этот фрагмент
+	// единственным источником (см. darkcore-singbox/CLAUDE.md).
+	configPath    = "/etc/sing-box/conf.d/90-proxy.json"
 	targetService = "sing-box"
 )
 

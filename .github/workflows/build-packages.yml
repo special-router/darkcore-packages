@@ -9,7 +9,7 @@ env:
   # OpenWrt SDK for the target these packages ship to.
   SDK_FILE: "openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
   SDK_URL_BASE: "https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8"
-  PKGS: "geoupdate darkcore-xray darkcore-main dcvpnupd"
+  PKGS: "geoupdate darkcore-singbox darkcore-main dcvpnupd"
 
 jobs:
   build:
@@ -51,9 +51,9 @@ jobs:
           # tarball sitting next to it.
           mv openwrt-sdk-*/ openwrt-sdk
 
-      # dl/ holds the xray-core source tarball and the Go module cache
+      # dl/ holds the sing-box source tarball and the Go module cache
       # (GO_MOD_CACHE_DIR = dl/go-mod-cache); go-build/ is the Go build cache.
-      # Without this, darkcore-xray recompiles all of xray-core every run.
+      # Without this, darkcore-singbox recompiles all of sing-box every run.
       - name: Cache build downloads and Go cache
         uses: actions/cache@v4
         with:

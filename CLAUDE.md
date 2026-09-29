@@ -8,12 +8,12 @@ OpenWrt/FriendlyWrt package feed с **backend-компонентами** про�
 `scripts/add_packages.sh` делает
 `git clone https://github.com/special-router/darkcore-packages.git darkcore --depth 1 -b main`
 в `friendlywrt/package/darkcore` и включает
-`CONFIG_PACKAGE_{darkcore-xray,darkcore-main,geoupdate,dcvpnupd}=y`.
+`CONFIG_PACKAGE_{darkcore-singbox,darkcore-main,geoupdate,dcvpnupd}=y`.
 
 Здесь только UCI-конфиги, init-скрипты и Go-бинарники. **LuCI-приложения
 / темы здесь нет** — оно живёт отдельным пакетом в
 `darkcorewrt/packages/luci-app-darkcore` (страница ввода кода активации +
-статус xray + брендинг).
+статус sing-box + брендинг).
 
 ---
 
@@ -21,15 +21,16 @@ OpenWrt/FriendlyWrt package feed с **backend-компонентами** про�
 
 | пакет | версия | роль |
 |---|---|---|
-| `darkcore-main` | 1.1.0 | UCI-каркас `/etc/config/darkcore` (`uuid`, `api_base`) |
-| `darkcore-xray` | 1.0.4-3 | сам прокси (xray-core) + routing + nft + fail-open |
-| `dcvpnupd` | 0.2.0 | cron `*/5`: тянет per-uuid `proxy.json` с backend, рестартит xray |
-| `geoupdate` | 0.0.5 | cron `15 0`: освежает `geoip.dat`/`geosite.dat` |
+| `darkcore-main` | 1.2.0 | UCI-каркас `/etc/config/darkcore` (`activation_code`, `device_token`, `config_url`, `api_base`) |
+| `darkcore-singbox` | 1.12.4-1 | сам прокси (sing-box) + routing + nft + config-валидация + fail-open watchdog |
+| `dcvpnupd` | 0.3.1 | cron `*/5`: меняет одноразовый код на device_token, тянет sing-box конфиг с backend, рестартит сервис |
+| `geoupdate` | 0.0.5 | cron `15 0`: освежает `geoip.dat`/`geosite.dat` (задел под xray, сейчас мёртвый груз — см. ниже) |
 
 `darkcore-provision` **удалён** (2026-09-04) — он никогда не подключался в
 образ (`add_packages.sh` не ставил `CONFIG_PACKAGE_darkcore-provision`),
-саморегистрация на первом бутe не работала. UUID заводится вручную через
-LuCI-страницу или `uci`.
+саморегистрация на первом бутe не работала. Код активации заводится
+вручную через LuCI-страницу или `uci` (см. ниже, «2026-09: миграция с
+UUID на код активации»).
 
 ---
 
@@ -39,13 +40,17 @@ Config-only (`Build/Compile = true`). Ставит `/etc/config/darkcore`:
 
 ```
 config darkcore 'main'
-	option uuid ''
-	option api_base 'https://sub.special-wifi.ru'
+	option activation_code ''
+	option device_token ''
+	option config_url ''
+	option api_base 'https://special-wifi.link'
 ```
 
 | ключ | читает |
 |---|---|
-| `darkcore.main.uuid` | `dcvpnupd` (`getUuid`), LuCI-страница, argon-баннер «не сконфигурирован» |
+| `darkcore.main.activation_code` | `dcvpnupd` (`ensureActivated`, одноразовый — сам же и чистит), LuCI-страница |
+| `darkcore.main.device_token` | `dcvpnupd` (`ensureActivated`/`fetchConfig`, `Bearer`), argon-баннер «не сконфигурирован» |
+| `darkcore.main.config_url` | `dcvpnupd` (`fetchConfig`) |
 | `darkcore.main.api_base` | `dcvpnupd` (`getAPIBase`); пусто → вкомпилированный дефолт `defaultAPIBase` |
 
 Смена backend для партии плат = `uci set darkcore.main.api_base=...; uci commit darkcore`
@@ -53,67 +58,125 @@ config darkcore 'main'
 
 ---
 
-## `darkcore-xray`
+## `darkcore-singbox`
 
-Go-пакет: `xray-core` v25.1.30 (тарбол с codeload) → `/usr/bin/xray`.
-Сборка = стоковый рецепт `feeds/packages/net/xray-core` без `go mod vendor`
-(коммит `9303e3e`; если сборка падает на модулях — чинить сеть/токен, не
-возвращать вендоринг). `DEPENDS: $(GO_ARCH_DEPENDS) +ca-bundle`.
+**2026-09: заменяет `darkcore-xray` полностью** (не сосуществуют).
+Причина — не выбор, а необходимость: бэкенд отдаёт конфиг в нативной
+схеме sing-box (`"type":"vless"`, `"server"`/`"server_port"`,
+`"tls":{"reality":{...},"utls":{...}}`, группы `"type":"urltest"`/
+`"type":"selector"`), а не в xray/v2ray-схеме
+(`"protocol":"vless"`+`"streamSettings"`) — и обратной конвертации без
+потерь не существует (вложенные `selector`-группы по странам не имеют
+аналога в плоской модели `routing.balancers` у xray). Разбор вариантов —
+`~/.claude/plans/greedy-waddling-papert.md` (План A против Плана B).
+
+Go-пакет: `sing-box` v1.12.4 (тарбол с codeload,
+`github.com/sagernet/sing-box`) → `/usr/bin/sing-box`. Сборка — тот же
+паттерн, что у `darkcore-xray` (golang-package.mk, без вендоринга, без
+зависимости на апстримный `feeds/packages/net/sing-box` — собираем сами,
+чтобы `GO_PKG_TAGS` (`with_utls,with_quic,with_clash_api`) были явно в
+своём Makefile, а не в Kconfig-меню апстрима, которое
+`scripts/add_packages.sh` не умеет выставлять). `with_utls` обязателен —
+без него vless+Reality-outbound'ы бэкенда не устанавливают TLS.
+`DEPENDS: $(GO_ARCH_DEPENDS) +ca-bundle +kmod-inet-diag`.
 
 Ставит:
-- `/etc/config/xray` (`files/xray.conf`) — `enabled '1'`,
-  `confdir '/etc/xray'`, `datadir '/usr/share/xray'`, `format 'json'`.
-- `/etc/init.d/xray` (`files/xray.init`) — procd, `START=00`, инстанс
-  `xray`. Гейт `xray.enabled.enabled=1`. `wait_for_gateway 192.168.2.1`
-  (30×1 c, дальше «continuing anyway»). Policy routing: `ip rule
+- `/etc/config/sing-box` (`files/sing-box.conf`) — `enabled '1'`,
+  `user 'root'` (TPROXY + policy routing требуют root, как и у xray),
+  `confdir '/etc/sing-box/conf.d'`, `workdir '/usr/share/sing-box'`.
+- `/etc/init.d/sing-box` (`files/sing-box.init`) — procd, `START=00`,
+  инстанс `sing-box`. Та же policy routing, что у `xray.init` (`ip rule
   fwmark 1 → table 100`, `local 0.0.0.0/0 dev lo`,
-  `default via 192.168.2.1`. `nft -f /usr/share/xray/nftables.rulesv46`.
-  Запуск `xray run -confdir /etc/xray -format json`, `respawn`. `stop`:
-  `nft flush ruleset` + откат routing. `service_triggers`: reload на
-  `uci commit xray`.
-- `/etc/xray/{dns,inbounds,routing,observatory,tail_outbounds}.json` —
-  xray сливает все `*.json` из `-confdir`.
-- `/usr/share/xray/nftables.rulesv46`.
+  `default via 192.168.2.1`, best-effort `wait_for_gateway`), тот же
+  `nft -f /usr/share/sing-box/nftables.rulesv46`. **Плюс валидация**:
+  `start_service`/`restart_service` гоняют `sing-box check -C "$confdir"`
+  перед запуском/рестартом; если конфиг битый — не трогают уже
+  работающий процесс и откатывают `$confdir` на снимок
+  `/etc/sing-box/.lastgood` (обновляется при каждой успешной проверке),
+  так что даже ребут после сломанного фетча поднимается с последним
+  рабочим конфигом, а не с блэкхолом. Запуск: `sing-box run -C
+  "$confdir" -D "$workdir"`, `respawn`. `stop`: `nft flush ruleset` +
+  откат routing (как у xray).
+- `/etc/init.d/sing-box-watchdog` (`files/sing-box-watchdog.init` +
+  `files/sing-box-watchdog.sh`) — отдельный procd-сервис, `START=98`
+  (на 1 раньше sing-box). См. «fail-open» ниже.
+- `/etc/sing-box/conf.d/{00-base,90-proxy}.json` — sing-box мерджит все
+  `*.json` из `-C confdir` по алфавиту. **Проверено вживую на реальном
+  железе (2026-09-29): для скаляров побеждает ПЕРВЫЙ (более ранний по
+  алфавиту) файл, а не последний.** Причина — реализация в
+  `sing/common/json/badjson/merge.go` (`mergeJSON`): для каждого файла
+  вызывается `MergeJSON(source=текущий_файл, destination=накопленное)`,
+  и в объектах для уже существующего в `destination` ключа делается
+  рекурсивный merge, где скалярный `default:`-кейс просто возвращает
+  `destination` (старое значение), source отбрасывается целиком. Массивы
+  (`outbounds`) - другое дело, там `destination = append(destination,
+  source...)`, конкатенация работает как ожидалось. Из-за этого
+  `route.final`, once set in `00-base.json`, был НЕ переопределим из
+  `90-proxy.json` - весь трафик уходил `direct`, несмотря на валидный
+  активированный конфиг с реальными VLESS-серверами. Фикс: `00-base.json`
+  **не должен** задавать `route.final` вообще - тогда ключ у него
+  просто отсутствует в объекте `route`, и `90-proxy.json` добавляет его
+  как новый (не конфликтующий) ключ. Без активации (`90-proxy.json={}`,
+  единственный outbound - `direct`) `outbound.Manager` при пустом
+  `defaultTag` сам берёт первый объявленный outbound по умолчанию (см.
+  `adapter/outbound/manager.go`) - то есть `direct`, тот же безопасный
+  дефолт, но без явного `route.final` в базовом конфиге.
+- `/usr/share/sing-box/nftables.rulesv46`.
 
-Конфиги xray:
-- `dns.json` — резолвер xray: `223.5.5.5`, DoH `1.1.1.1`, DoH `dns.google`,
-  `localhost`; host-override `dns.google → 8.8.8.8`.
-- `inbounds.json` — `all-in` (`dokodemo-door`, tproxy, порт `12345`) +
-  SOCKS `noauth` порт `10808`.
-- `routing.json` — `domainMatcher mph`, `domainStrategy IPIfNonMatch`.
-  Балансер `proxy-balancer` (`selector ["proxy"]`, `strategy leastPing`,
-  **`fallbackTag: "direct"`**). Правила по порядку:
-  `geosite:category-ads-all`→`block`; udp/53 от `all-in`→`dns-out`;
-  **`full:sub.special-wifi.ru`→`direct`** (backend должен быть доступен
-  мимо прокси, иначе `dcvpnupd` не восстановится при упавшем VPN);
-  `1.1.1.1`/`8.8.8.8`→`proxy-balancer`; `regexp:\.ru$`→`direct`;
-  `geoip:ru`→`direct`; default `tcp,udp`→`proxy-balancer`.
-- `observatory.json` — `burstObservatory` (`subjectSelector ["proxy"]`,
-  проба `https://www.gstatic.com/generate_204`, `interval 30s`,
-  `sampling 3`, `timeout 10s`). Даёт health-данные, которые нужны и
-  `fallbackTag`, и `leastPing`. Открывает **не** gRPC-API — просто
-  внутренний health-check.
-- `tail_outbounds.json` — только `direct` (`freedom`, `sockopt.mark 255`),
-  `block` (`blackhole`), `dns-out`. **`proxy`-outbound приносит
-  `dcvpnupd`** в `/etc/xray/proxy.json`. Пока `dcvpnupd` не отработал
-  успешно, у балансера нет членов → всё уходит в `fallbackTag: direct`.
-- `nftables.rulesv46` — `table inet xray`: `prerouting` (tproxy
-  `→127.0.0.1:12345` / `[::1]:12345`, bypass `127/8`, `192.168/16`,
-  `::1`, `fe80::/10`, `fd00::/8`, спец-кейс udp/53, `return` при mark
-  `0xff`), `output` (mark `0x1` для локально-исходящего), `divert`
-  (TPROXY established-socket).
+Конфиги sing-box:
+- `00-base.json` — статика, которой нет в конфиге бэкенда: `dns`
+  (`223.5.5.5` + DoH `1.1.1.1`, **оба с `"detour": "direct"`** - иначе
+  после фикса `route.final` DNS-резолвинг сам пытается пойти через
+  `GLOBAL AUTO`, а чтобы законнектиться к outbound'у, нужно сперва
+  зарезолвить его хост через тот же DNS - замкнутый круг, sing-box падает
+  с `DNS query loopback in transport[resolver]`. Проверено вживую
+  2026-09-29 сразу после фикса `route.final` из пункта выше. `detour`
+  форсит резолвинг всегда direct, не завязываясь на `route.final`), `inbounds` (`tproxy` на `12345` — прямой
+  аналог xray'евского `dokodemo-door`+tproxy; `mixed` на `127.0.0.1:10808`
+  — аналог голого SOCKS-инбаунда xray, и путь пробника вотчдога),
+  outbound `direct` (`routing_mark: 255` — аналог xray'евского
+  `sockopt.mark 255` на `direct`/`dns-out`, чтобы дозвон наружу не
+  зацикливался через TPROXY), **`route.final` сознательно НЕ задан**
+  (см. разбор мерджа выше - если задать здесь, `90-proxy.json` не сможет
+  его переопределить) + одно правило `hijack-dns` для DNS с
+  tproxy-инбаунда.
+- `90-proxy.json` — то, что приносит `dcvpnupd` (сырые байты от бэкенда,
+  без изменений). На заводской прошивке — плейсхолдер `{}` (валидный
+  пустой фрагмент; `direct`-outbound и так есть в `00-base.json`, так что
+  неактивированный роутер работает в режиме «всё напрямую» без отдельного
+  плейсхолдерного `direct`).
+- **Никаких geoip/geosite/ad-block правил** — сознательно не перенесены с
+  xray в v1 (нужен `.srs`-формат sing-box + отдельный шаг в `build.sh`,
+  отдельная задача на будущее).
+- `nftables.rulesv46` — `table inet sing-box`, один в один правила
+  `darkcore-xray` (тот же TPROXY-порт `12345`, тот же локальный
+  `10808`, те же bypass'ы) — коллизий нет, xray полностью убран.
 
 ### fail-open — как работает
-Провайдер режет VLESS-эндпоинт → `burstObservatory` за ~30-90 c помечает
-все `proxy`-outbound'ы мёртвыми → `proxy-balancer` отдаёт трафик в
-`fallbackTag: direct` (чистый интернет без VLESS), **соединение не
-рвётся**. Когда прокси снова отвечает — балансер сам возвращает трафик на
-него.
+У sing-box `urltest` при недоступности всех участников использует
+**первый outbound из своего списка**, а не переключается на `direct`
+автоматически; `selector` — вообще ручное переключение (через Clash
+API). Значит нет xray-подобного `fallbackTag`, на который можно было бы
+положиться внутри самого прокси — фейл-опен сделан **снаружи**,
+вотчдогом:
 
-**Ещё не сделано (план task 4c):** если xray вообще не поднялся (backend
-отдал битый `proxy.json`), nft-правила TPROXY остаются загруженными →
-блэкхол. Нужны: `xray run -test` в `dcvpnupd` перед заменой файла +
-watchdog в `xray.init`, снимающий nft-правила если xray не запущен.
+`sing-box-watchdog` каждые 15с делает запрос на
+`https://cp.cloudflare.com/generate_204` через локальный `mixed`-инбаунд
+sing-box (`127.0.0.1:10808` — тот же probe URL, что использует
+`urltest` бэкенда, чтобы вотчдог и sing-box не расходились в оценке
+«жив/мёртв»). После 3 подряд неудач (~45с) — `nft flush ruleset`:
+TPROXY-перехват полностью снимается, трафик LAN идёт в интернет
+напрямую, соединения не рвутся. При восстановлении — `nft -f
+nftables.rulesv46` поднимает правила обратно. Отдельный от sing-box
+процесс специально: рестарт sing-box каждые 5 минут (`dcvpnupd`) не
+должен сбивать состояние вотчдога.
+
+**Проверено вживую (2026-09-29):** директорийный мердж sing-box (`-C
+confdir`) - конкатенация `outbounds` работает как ожидалось, но
+override скаляров вроде `route.final` работает НАОБОРОТ (побеждает
+первый файл, не последний) - см. разбор в начале секции. Fallback на
+`jq`-мердж не понадобился - фикс через "просто не задавать `final` в
+`00-base.json`" оказался достаточным и проще.
 
 ---
 
@@ -151,14 +214,17 @@ Go, `PKG_SOURCE_PROTO:=local` (из `src/`), **stdlib-only** (после
 `getAPIBase()` не изменился по форме: `darkcore.main.api_base`, иначе
 вкомпилированный дефолт — теперь `https://special-wifi.link`.
 
-**`configPath`/`targetService` — провизорные константы**
-(`/etc/sing-box/proxy.json`, `sing-box`): в `darkcore-packages` пока нет
-пакета sing-box (нет confdir, нет init-скрипта, нет `/etc/config/sing-box`
-— это отдельная задача, аналог заведения `darkcore-xray`). `config_url`
-уже отдаёт готовый JSON (`log`+`outbounds`+`route`, без `inbounds`/`dns`
-— по всей видимости sing-box, как и xray, будет мержить несколько файлов
-через `-C confdir`), так что `dcvpnupd` по-прежнему просто пишет байты
-как есть, без сборки/мержа на своей стороне.
+**`configPath`/`targetService`**: `/etc/sing-box/conf.d/90-proxy.json` /
+`sing-box` — теперь настоящие пути, не провизорные (пакет
+`darkcore-singbox` заведён, см. выше). `configPath` указывает внутрь
+confdir-директории `darkcore-singbox`'а, а не на отдельный файл: имя с
+префиксом `90-` гарантирует, что этот фрагмент мерджится sing-box'ом
+после статического `00-base.json` (алфавитный порядок для конкатенации
+`outbounds`). Про `route.final` — см. разбор в разделе про конфиги выше:
+`00-base.json` его не задаёт специально, чтобы `90-proxy.json` мог
+добавить свой `final` как новый ключ, а не проигрывать в конфликте
+скаляров. `dcvpnupd` по-прежнему просто пишет байты как есть, без
+сборки/мержа на своей стороне — мердж делает сам sing-box через `-C`.
 
 **Что не обрабатывается:** протухший/невалидный `device_token` (401 от
 `config_url`) не триггерит повторную активацию — `activation_code` к
@@ -206,9 +272,10 @@ atomic (нет temp+rename).
 | `GET` | `<config_url>` (из ответа выше), заголовок `Authorization: Bearer <device_token>` | → `configPath` в `dcvpnupd` (готовый sing-box JSON: `log`+`outbounds`+`route`) |
 
 `api_base` по умолчанию — `https://special-wifi.link` (вкомпилирован как
-`defaultAPIBase` в `dcvpnupd/src/main/main.go`; в `darkcore-main` не
-проверялось — вне скоупа этой правки). Переопределяется через
-`uci set darkcore.main.api_base=...` без пересборки.
+`defaultAPIBase` в `dcvpnupd/src/main/main.go`, и теперь тем же значением
+шипается в `darkcore-main/files/darkcore.conf`, так что оба места
+согласованы). Переопределяется через `uci set darkcore.main.api_base=...`
+без пересборки.
 
 `activate/` — без авторизации (код в теле — секрет и признак
 активации); `config_url` — с `Bearer`-токеном, полученным от `activate/`.
@@ -230,45 +297,58 @@ per-device `config_url` (текущий, код-активации flow).
   - `0 0 * * * curl -fsSL ".../special-router/darkcore-updater/main/update.sh" | sh`
   - `15 0 * * * geoupdate`
   - `*/5 * * * * dcvpnupd`
-- `build.sh` — `wget` `geoip.dat` / `geosite.dat` в
-  `${ROOTFS}/usr/share/xray/` при сборке образа.
-- init `/etc/init.d/xray` включается на финализации образа (без явного
-  `enable` в Makefile — дефолт OpenWrt).
+- init `/etc/init.d/sing-box` и `/etc/init.d/sing-box-watchdog` включаются
+  на финализации образа (без явного `enable` в Makefile — дефолт
+  OpenWrt).
+- `build.sh`'s `wget` `geoip.dat`/`geosite.dat` в `usr/share/xray/`
+  **убран** вместе с `darkcore-xray` (v1 sing-box не использует
+  geoip-правила). `geoupdate` продолжает качать эти же файлы по крону —
+  теперь их никто не читает, дохлый груз (см. `darkcorewrt/TODO.md`).
 
 ## Сборка пакетов
 
 - Go-пакеты — через `feeds/packages/lang/golang/golang-package.mk`. У
-  `dcvpnupd`/`geoupdate` `PKG_SOURCE_PROTO:=local`, у `darkcore-xray` —
-  тарбол xray-core с codeload.
-- CI `.github/workflows/build-packages.yml` (`workflow_dispatch`): матрица
-  из 4 пакетов, OpenWrt SDK 24.10.4 rockchip/armv8, `make
-  package/<pkg>/compile`, публикация подписанного opkg-feed в ветку
-  `feed`.
+  `dcvpnupd`/`geoupdate` `PKG_SOURCE_PROTO:=local`, у `darkcore-singbox` —
+  тарбол sing-box с codeload (`PKG_HASH:=skip` пока не проставлен настоящий
+  sha256 — заполнить после первого успешного `make download`).
+- CI `.github/workflows/build-packages.yml` (`workflow_dispatch`): список
+  пакетов в `PKGS` (`geoupdate darkcore-singbox darkcore-main dcvpnupd`),
+  OpenWrt SDK 24.10.4 rockchip/armv8, `make package/<pkg>/compile`,
+  публикация подписанного opkg-feed в ветку `feed`.
 - Ручная сборка через `darkcorewrt/build.sh` идёт в свежем
   `friendlywrt24-<dev>/` с новым `dl/go-mod-cache`; прерванный прогон
   оставляет частично распакованные модули → `import lookup disabled by
   -mod=vendor` / `pattern ... no matching files found`. Лечение: снести
   распакованные деревья в `dl/go-mod-cache` (оставив `cache/`) либо весь
   `dl/go-mod-cache`, не прерывать прогон. (После `5758155` `dcvpnupd`
-  stdlib-only — эта боль остаётся только у `darkcore-xray`.)
+  stdlib-only — эта боль остаётся только у `darkcore-singbox`.)
 
-## Проверка после смены адреса (на живой плате)
+## Проверка активации (на живой плате)
 
-- `logread | grep dcvpnupd` — без `x509` / `no such host` /
-  `connection refused`;
-- `curl -sS https://sub.special-wifi.ru/api/v1/vpn/box/<uuid>/config/` с
+- ввести код активации через LuCI-страницу (или `uci set
+  darkcore.main.activation_code=...; uci commit darkcore`) и нажать
+  «Save & Apply» — `ucitrack` сразу прогоняет `dcvpnupd`, ждать крона не
+  нужно;
+- `logread | grep dcvpnupd` — «Устройство активировано», без `x509` /
+  `no such host` / `connection refused` / `HTTP 4xx`;
+- `uci get darkcore.main.device_token` / `.config_url` — заполнены,
+  `.activation_code` снова пуст (одноразовый, чистится сразу);
+- `curl -sS -H "Authorization: Bearer $(uci get darkcore.main.device_token)" "$(uci get darkcore.main.config_url)"` с
   платы → `200` + валидный JSON;
-- `/etc/xray/proxy.json` обновился, `service xray restart` в логе, xray
-  поднялся (`ubus call service list '{"name":"xray"}'`);
-- fail-open: заблокировать VLESS-сервер → через ~1-2 мин внешний IP
-  клиента становится IP роутера (пошёл `direct`), соединение живо; снять
-  блок → трафик вернулся на прокси.
+- `/etc/sing-box/conf.d/90-proxy.json` обновился, в логе — успешная
+  `sing-box check` и рестарт (не «keeping old config running»);
+- fail-open (`sing-box-watchdog`, не встроенный в sing-box механизм):
+  заблокировать все VLESS-сервера → через ~45-60с `nft list ruleset`
+  пуст, внешний IP клиента становится IP роутера, соединение живо; снять
+  блок → через ~15-30с `nft -f` возвращает TPROXY-правила, трафик
+  вернулся на прокси.
 
 ## Связанные задачи в `darkcorewrt`
 
 - LuCI-страница «Special Router» — `darkcorewrt/packages/luci-app-darkcore`
-  (ручной ввод UUID, статус/управление xray, брендинг).
-- Периодический health-check xray (`TODO.md` 3b) — частично закрыт
-  fail-open выше; полностью — с task 4c (watchdog).
+  (ввод кода активации, статус/управление sing-box, брендинг).
+- Периодический health-check прокси (`TODO.md` 3b) — сделано полностью:
+  валидация конфига перед рестартом + `sing-box-watchdog` (см.
+  «fail-open» выше) закрывают то, что для xray оставалось задачей 4c.
 - Авто-DNS LAN-клиентам по DHCP (`TODO.md` 3c) — сделано в
   `darkcorewrt/build.sh` (`add_lan_dhcp_dns`), не здесь.

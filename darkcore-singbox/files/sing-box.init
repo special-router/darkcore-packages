@@ -1,0 +1,171 @@
+#!/bin/sh /etc/rc.common
+
+START=00
+USE_PROCD=1
+
+CONF="sing-box"
+PROG="/usr/bin/sing-box"
+GATEWAY="192.168.2.1"
+TABLE_ID="100"
+FWMARK="1"
+LASTGOOD_DIR="/etc/sing-box/.lastgood"
+
+wait_for_gateway() {
+    local max_attempts=30
+    local attempt=0
+
+    echo "Waiting for gateway $GATEWAY..."
+    until ping -c1 -W1 $GATEWAY >/dev/null 2>&1; do
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            echo "Gateway not reachable after $max_attempts attempts"
+            return 1
+        fi
+        sleep 1
+    done
+    echo "Gateway $GATEWAY is reachable"
+    return 0
+}
+
+check_nftables_file() {
+    local datadir="$1"
+    local nft_file="${datadir}/nftables.rulesv46"
+
+    if [ ! -f "$nft_file" ]; then
+        echo "Warning: nftables rules file not found: $nft_file"
+        return 1
+    fi
+    return 0
+}
+
+setup_routing() {
+    if ! ip rule show | grep -q "fwmark $FWMARK lookup $TABLE_ID"; then
+        ip rule add fwmark $FWMARK table $TABLE_ID
+    fi
+
+    ip route add local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
+
+    if ! ip route show table $TABLE_ID | grep -q "default via $GATEWAY"; then
+        ip route add default via $GATEWAY table $TABLE_ID
+    fi
+}
+
+cleanup_routing() {
+    ip rule del fwmark $FWMARK table $TABLE_ID 2>/dev/null
+    ip route del local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
+    ip route del default via $GATEWAY table $TABLE_ID 2>/dev/null
+}
+
+# sing-box check -C <confdir> - валидация смёрженного конфига перед
+# применением (аналог xray'евского "run -test", но у sing-box это
+# отдельная нативная подкоманда).
+check_config() {
+    local confdir="$1"
+    "$PROG" check -C "$confdir" >/tmp/sing-box-check.log 2>&1
+}
+
+snapshot_good_config() {
+    local confdir="$1"
+    mkdir -p "$LASTGOOD_DIR"
+    cp -a "$confdir"/. "$LASTGOOD_DIR"/ 2>/dev/null
+}
+
+restore_last_good() {
+    local confdir="$1"
+    [ -d "$LASTGOOD_DIR" ] || return 1
+    cp -a "$LASTGOOD_DIR"/. "$confdir"/ 2>/dev/null
+}
+
+start_service() {
+	config_load "$CONF"
+
+	local enabled
+	config_get_bool enabled "main" "enabled" "0"
+	[ "$enabled" -eq "1" ] || return 1
+
+	local confdir
+	local workdir
+	local user
+
+	config_get confdir "main" "confdir" "/etc/sing-box/conf.d"
+	config_get workdir "main" "workdir" "/usr/share/sing-box"
+	config_get user "main" "user" "root"
+
+	if [ ! -x "$PROG" ]; then
+		echo "Error: $PROG not found or not executable"
+		return 1
+	fi
+
+	if ! check_config "$confdir"; then
+		echo "sing-box: config in $confdir failed validation, trying last-known-good" | logger -t sing-box -p daemon.err
+		cat /tmp/sing-box-check.log | logger -t sing-box -p daemon.err
+		if ! restore_last_good "$confdir" || ! check_config "$confdir"; then
+			echo "Error: no valid sing-box config available, refusing to start"
+			return 1
+		fi
+	fi
+	snapshot_good_config "$confdir"
+
+	if ! wait_for_gateway; then
+		echo "Failed to reach gateway, continuing anyway..."
+	fi
+
+	setup_routing
+
+	if check_nftables_file "$workdir"; then
+		nft -f "${workdir}/nftables.rulesv46"
+	else
+		echo "Warning: Skipping nftables rules loading"
+	fi
+
+	mkdir -p "$workdir"
+
+	procd_open_instance "$CONF"
+	procd_set_param command "$PROG" run -C "$confdir" -D "$workdir"
+	procd_set_param user "$user"
+	procd_set_param file $confdir
+
+	procd_set_param limits core="unlimited"
+	procd_set_param limits nofile="1000000 1000000"
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param respawn
+
+	procd_close_instance
+}
+
+stop_service() {
+    nft flush ruleset 2>/dev/null
+    cleanup_routing
+    echo "cleaned"
+}
+
+# Переопределяем стандартный restart: если новый конфиг (перезаписанный
+# dcvpnupd) не проходит валидацию - не трогаем уже работающий процесс и
+# откатываем битые байты на диске на последний рабочий снимок, чтобы даже
+# ребут после сломанного фетча не привёл к блэкхолу.
+restart_service() {
+	local confdir
+	config_load "$CONF"
+	config_get confdir "main" "confdir" "/etc/sing-box/conf.d"
+
+	if check_config "$confdir"; then
+		snapshot_good_config "$confdir"
+		stop
+		start
+	else
+		echo "sing-box: new config failed validation, keeping old config running" | logger -t sing-box -p daemon.err
+		cat /tmp/sing-box-check.log | logger -t sing-box -p daemon.err
+		restore_last_good "$confdir"
+		return 1
+	fi
+}
+
+reload_service() {
+	stop
+	start
+}
+
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
+}
