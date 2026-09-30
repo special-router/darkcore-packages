@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-singbox
 PKG_VERSION:=1.11.15
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 
 # ВАЖНО: не поднимать выше 1.11.x без проверки. С 1.12.0 sing-box перешёл
 # на форк github.com/metacubex/utls, который через common/badtls тянет
@@ -69,10 +69,10 @@ GO_PKG_LDFLAGS_X:=$(GO_PKG)/constant.Version=$(SINGBOX_VERSION)
 # with_clash_api, наоборот, ПРОВЕРЕН (2026-09-29): собирается чисто на
 # уже имеющемся go.sum.fixed, новых модулей не требует (видимо,
 # go-chi/chi/v5 и остальное, что ему нужно, уже и так в графе через
-# with_utls). Нужен для страницы статуса в LuCI - показывает, какой
-# VLESS-профиль сейчас реально выбран `GLOBAL AUTO` и пинг до него
-# (см. darkcore-singbox-profile-status в files/, experimental.clash_api
-# в files/conf.d/00-base.json).
+# with_utls). Нужен для страницы статуса в LuCI - список профилей с
+# живым пингом + ручной выбор (см. darkcore-singbox-profile-list,
+# darkcore-singbox-select-profile, sing-box-sync-manual-selector в
+# files/, experimental.clash_api/cache_file в files/conf.d/00-base.json).
 GO_PKG_TAGS:=with_utls with_clash_api
 
 include $(INCLUDE_DIR)/package.mk
@@ -113,7 +113,9 @@ define Package/darkcore-singbox/install
 	$(INSTALL_BIN) $(CURDIR)/files/sing-box-watchdog.sh $(1)/usr/bin/sing-box-watchdog
 
 	$(INSTALL_DIR) $(1)/usr/libexec/
-	$(INSTALL_BIN) $(CURDIR)/files/darkcore-singbox-profile-status.sh $(1)/usr/libexec/darkcore-singbox-profile-status
+	$(INSTALL_BIN) $(CURDIR)/files/darkcore-singbox-profile-list.sh $(1)/usr/libexec/darkcore-singbox-profile-list
+	$(INSTALL_BIN) $(CURDIR)/files/darkcore-singbox-select-profile.sh $(1)/usr/libexec/darkcore-singbox-select-profile
+	$(INSTALL_BIN) $(CURDIR)/files/sing-box-sync-manual-selector.sh $(1)/usr/libexec/darkcore-singbox-sync-manual-selector
 
 	$(INSTALL_DIR) $(1)/etc/config/
 	$(INSTALL_CONF) $(CURDIR)/files/sing-box.conf $(1)/etc/config/sing-box

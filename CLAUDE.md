@@ -434,3 +434,58 @@ sync` после `dd` не спасает от этого - помогает т�
 прошить **чисто стоковый** образ (без `add_packages.sh`) на ту же
 карту; если он тоже не грузится - дело в карте/железе, а не в коде, и
 дальше искать нужно там (другая карта, другой картридер).
+
+## 2026-09-30: ручной выбор профиля (не только авто по пингу)
+
+`route.final` = `"GLOBAL AUTO"`, это `urltest`-группа - sing-box
+категорически отказывается переключать её вручную через Clash API
+(`PUT /proxies/GLOBAL%20AUTO` → `{"message":"Must be a Selector"}`,
+проверено эмпирически на живом роутере). Вложенные `COUNTRY <страна>`
+outbound'ы в конфиге от бэкенда - это `selector` (ручной выбор
+поддерживают), но никуда не подключены в роутинге (`route.final` идёт
+прямо на `GLOBAL AUTO`, они просто висят в списке outbound'ов).
+
+**Решение** — `sing-box-sync-manual-selector` (новый
+`/usr/libexec/darkcore-singbox-sync-manual-selector`, вызывается из
+`sing-box.init` в начале `start_service()`/`restart_service()`, ДО
+`check_config`):
+- зеркалит список серверов из `outbounds[tag="GLOBAL AUTO"].outbounds`
+  (в `90-proxy.json`, живом файле от бэкенда) в свою `selector`-группу
+  `MANUAL` с добавленным первым пунктом `"GLOBAL AUTO"` (автомат);
+- пишет `confdir/80-manual.json` с `{"route":{"final":"MANUAL"}}`.
+  Имя файла НЕ случайное: `00-base.json` (наш) < `80-manual.json`
+  (генерируемый) < `90-proxy.json` (бэкенд) по алфавиту, а при мердже
+  `sing-box -C` для скаляров побеждает более РАННИЙ файл (см. выше про
+  `route.final`-баг) - значит `80-manual.json`'s `final:"MANUAL"`
+  побеждает над `90-proxy.json`'s собственным `final:"GLOBAL AUTO"`,
+  и переключение реально управляет трафиком, а не просто отображением.
+- если `90-proxy.json` ещё нет (пре-активация) или в нём нет `GLOBAL
+  AUTO` - скрипт удаляет стухший `80-manual.json` и ничего не делает,
+  `route.final` остаётся неустановленным (как было до этой фичи,
+  дефолт - первый outbound, `direct`).
+
+**Персистентность выбора** — `experimental.cache_file` в `00-base.json`
+(`{"enabled":true,"path":"/etc/sing-box/cache.db"}`). Без него выбор
+`MANUAL`-селектора сбрасывался бы на дефолт (`GLOBAL AUTO`) при КАЖДОМ
+рестарте sing-box, включая рестарт, который `dcvpnupd` триггерит сам
+при каждом обновлении `90-proxy.json` с бэкенда. Поле
+`store_selected`, которое я сначала добавил по памяти - не существует
+в схеме этой версии sing-box (`unknown field "store_selected"`,
+поймано на реальной валидации), персистентность выбора работает
+просто от `cache_file.enabled`, отдельного флага не требуется.
+
+**LuCI-скрипты** (Clash API 127.0.0.1-only, дергаются через `fs.exec`
+из `setup.js`, см. `luci-app-darkcore/CLAUDE.md`):
+- `darkcore-singbox-profile-list` — читает `MANUAL`'s `now` +
+  `/group/GLOBAL%20AUTO/delay` (тестирует пинг ВСЕХ серверов ОДНИМ
+  запросом - Clash API гоняет их параллельно на своей стороне, не надо
+  дергать каждый сервер по отдельности и percent-encode его тег);
+- `darkcore-singbox-select-profile <tag>` — `PUT /proxies/MANUAL`.
+- Заменили ими старый `darkcore-singbox-profile-status` (был
+  read-only, показывал только текущий профиль+пинг) - `profile-list`
+  строгий суперсет его функциональности.
+
+**Проверено вживую end-to-end** (2026-09-30): сгенерированный
+`80-manual.json` проходит `sing-box check`, `PUT` реально меняет
+исходящий IP (подтверждено `curl ifconfig.me` через SOCKS до и после),
+выбор пережил `service sing-box restart` благодаря `cache_file`.

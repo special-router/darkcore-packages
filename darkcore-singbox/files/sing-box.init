@@ -64,6 +64,16 @@ check_config() {
     "$PROG" check -C "$confdir" >/tmp/sing-box-check.log 2>&1
 }
 
+# Перегенерирует confdir/80-manual.json (selector "MANUAL", ручной выбор
+# профиля из LuCI) из актуального confdir/90-proxy.json перед КАЖДОЙ
+# валидацией - иначе список серверов внутри MANUAL отстанет от того, что
+# реально прислал бэкенд. Не самостоятельный шаг, часть подготовки
+# confdir к check_config; сам скрипт no-op, если проекта ещё нет
+# (пре-активация) - см. комментарий в самом скрипте.
+sync_manual_selector() {
+    /usr/libexec/darkcore-singbox-sync-manual-selector 2>&1 | logger -t sing-box
+}
+
 snapshot_good_config() {
     local confdir="$1"
     mkdir -p "$LASTGOOD_DIR"
@@ -95,6 +105,8 @@ start_service() {
 		echo "Error: $PROG not found or not executable"
 		return 1
 	fi
+
+	sync_manual_selector
 
 	if ! check_config "$confdir"; then
 		echo "sing-box: config in $confdir failed validation, trying last-known-good" | logger -t sing-box -p daemon.err
@@ -148,6 +160,8 @@ restart_service() {
 	local confdir
 	config_load "$CONF"
 	config_get confdir "main" "confdir" "/etc/sing-box/conf.d"
+
+	sync_manual_selector
 
 	if check_config "$confdir"; then
 		snapshot_good_config "$confdir"
