@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-singbox
 PKG_VERSION:=1.11.15
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 # ВАЖНО: не поднимать выше 1.11.x без проверки. С 1.12.0 sing-box перешёл
 # на форк github.com/metacubex/utls, который через common/badtls тянет
