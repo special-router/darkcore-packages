@@ -1,8 +1,0 @@
-#!/bin/sh /etc/rc.common
-
-START=05
-
-start() {
-	echo "$(date -u) checkpoint-05 (very early, before rpcd/S12)" >> /root/boot-trace.log
-	sync
-}

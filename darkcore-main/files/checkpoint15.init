@@ -1,8 +1,0 @@
-#!/bin/sh /etc/rc.common
-
-START=15
-
-start() {
-	echo "$(date -u) checkpoint-15 (after rpcd/S12, before dropbear/network S19-20)" >> /root/boot-trace.log
-	sync
-}

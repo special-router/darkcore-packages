@@ -1,8 +1,0 @@
-#!/bin/sh /etc/rc.common
-
-START=89
-
-start() {
-	echo "$(date -u) checkpoint-89 (just before sing-box-watchdog/S98, sing-box/S99)" >> /root/boot-trace.log
-	sync
-}

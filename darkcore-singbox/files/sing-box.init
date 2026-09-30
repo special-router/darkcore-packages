@@ -77,18 +77,11 @@ restore_last_good() {
 }
 
 start_service() {
-	echo "$(date -u) sing-box start_service ENTER" >> /root/boot-trace.log
-	sync
-
 	config_load "$CONF"
 
 	local enabled
 	config_get_bool enabled "main" "enabled" "0"
-	if [ "$enabled" -ne "1" ]; then
-		echo "$(date -u) sing-box start_service: disabled, returning" >> /root/boot-trace.log
-		sync
-		return 1
-	fi
+	[ "$enabled" -eq "1" ] || return 1
 
 	local confdir
 	local workdir
@@ -113,15 +106,9 @@ start_service() {
 	fi
 	snapshot_good_config "$confdir"
 
-	echo "$(date -u) sing-box start_service: config ok, waiting for gateway" >> /root/boot-trace.log
-	sync
-
 	if ! wait_for_gateway; then
 		echo "Failed to reach gateway, continuing anyway..."
 	fi
-
-	echo "$(date -u) sing-box start_service: gateway wait done, setting up routing" >> /root/boot-trace.log
-	sync
 
 	setup_routing
 
@@ -145,9 +132,6 @@ start_service() {
 	procd_set_param respawn
 
 	procd_close_instance
-
-	echo "$(date -u) sing-box start_service EXIT (procd_close_instance done)" >> /root/boot-trace.log
-	sync
 }
 
 stop_service() {
