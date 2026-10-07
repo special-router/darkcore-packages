@@ -147,7 +147,9 @@ start_service() {
 }
 
 stop_service() {
-    nft flush ruleset 2>/dev/null
+    # own table only - "flush ruleset" also took fw4 down (see
+    # nftables.rulesv46's header)
+    nft delete table inet sing-box 2>/dev/null
     cleanup_routing
     echo "cleaned"
 }

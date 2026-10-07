@@ -1,6 +1,13 @@
 #!/usr/sbin/nft -f
 
-flush ruleset
+# Only ever touch our own table - NOT "flush ruleset": that also wiped
+# fw4's "inet fw4" table (WAN input reject, LAN masquerade, forward rules)
+# on every sing-box start, and on stop/fail-open left LAN clients with no
+# NAT at all, i.e. fail-closed (confirmed on hardware 2026-10-07).
+# "table" first creates it empty if missing, so the delete never fails and
+# this file stays idempotent under "nft -f" (start + watchdog resume).
+table inet sing-box
+delete table inet sing-box
 
 table inet sing-box {
         chain prerouting {

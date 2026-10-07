@@ -110,8 +110,8 @@ Go-пакет: `sing-box` v1.12.4 (тарбол с codeload,
   `/etc/sing-box/.lastgood` (обновляется при каждой успешной проверке),
   так что даже ребут после сломанного фетча поднимается с последним
   рабочим конфигом, а не с блэкхолом. Запуск: `sing-box run -C
-  "$confdir" -D "$workdir"`, `respawn`. `stop`: `nft flush ruleset` +
-  откат routing (как у xray).
+  "$confdir" -D "$workdir"`, `respawn`. `stop`: `nft delete table inet
+  sing-box` (только своя таблица, см. ниже) + откат routing.
 - `/etc/init.d/sing-box-watchdog` (`files/sing-box-watchdog.init` +
   `files/sing-box-watchdog.sh`) — отдельный procd-сервис, `START=98`
   (на 1 раньше sing-box). См. «fail-open» ниже.
@@ -196,10 +196,27 @@ API). Значит нет xray-подобного `fallbackTag`, на котор
 `https://cp.cloudflare.com/generate_204` через локальный `mixed`-инбаунд
 sing-box (`127.0.0.1:10808` — тот же probe URL, что использует
 `urltest` бэкенда, чтобы вотчдог и sing-box не расходились в оценке
-«жив/мёртв»). После 3 подряд неудач (~45с) — `nft flush ruleset`:
+«жив/мёртв»). После 3 подряд неудач (~45с) — `nft delete table inet sing-box`:
 TPROXY-перехват полностью снимается, трафик LAN идёт в интернет
-напрямую, соединения не рвутся. При восстановлении — `nft -f
-nftables.rulesv46` поднимает правила обратно. Отдельный от sing-box
+напрямую через NAT `fw4`. При восстановлении — `nft -f
+nftables.rulesv46` поднимает правила обратно.
+
+**2026-10-07: было `nft flush ruleset` - и это ломало fail-open для LAN
+(и не только).** `flush ruleset` сносит ВСЕ таблицы, включая `inet fw4`
+штатного firewall4 (fw4 сам трогает только свою таблицу - `flush table
+inet fw4` в `ruleset.uc`). Последствия: (1) `nftables.rulesv46`
+начинался с `flush ruleset`, т.е. на КАЖДОМ старте sing-box (START=99,
+после firewall) роутер оставался вообще без firewall - ни reject на
+WAN input, ни masquerade, ни forward-правил; LAN при этом работал
+только потому, что весь его трафик уходил в TPROXY локально; (2) на
+`stop`/фейл-опене вотчдога LAN-клиенты оставались без NAT → без
+интернета, т.е. fail-CLOSED. Вотчдог проверяли только с самого роутера
+(тому NAT не нужен), поэтому не заметили. Поймано на железе с
+Windows-клиентом за роутером: после «Остановить» в LuCI - «Невозможно
+соединиться с удалённым сервером». Теперь все три места (rules-файл,
+`stop_service`, вотчдог) трогают только `table inet sing-box`;
+rules-файл идемпотентен (`table` + `delete table` в начале), проверено
+двойным `nft -f`. Отдельный от sing-box
 процесс специально: рестарт sing-box каждые 5 минут (`dcvpnupd`) не
 должен сбивать состояние вотчдога.
 
