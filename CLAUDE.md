@@ -476,10 +476,23 @@ outbound'ы в конфиге от бэкенда - это `selector` (ручн�
 
 **LuCI-скрипты** (Clash API 127.0.0.1-only, дергаются через `fs.exec`
 из `setup.js`, см. `luci-app-darkcore/CLAUDE.md`):
-- `darkcore-singbox-profile-list` — читает `MANUAL`'s `now` +
-  `/group/GLOBAL%20AUTO/delay` (тестирует пинг ВСЕХ серверов ОДНИМ
-  запросом - Clash API гоняет их параллельно на своей стороне, не надо
-  дергать каждый сервер по отдельности и percent-encode его тег);
+- `darkcore-singbox-profile-list` — один `GET /proxies`: `MANUAL`'s
+  `now` (текущий выбор), `MANUAL`'s `all` (полный список серверов →
+  поле `servers`) и `history[0].delay` каждого сервера (последний
+  результат периодического urltest самой `GLOBAL AUTO` - группа пишет
+  в общий `HistoryStorage` Clash-сервера, см. `protocol/group/urltest.go`
+  в 1.11.15) → поле `delays`;
+- **2026-10-07: живой `/group/GLOBAL%20AUTO/delay` убран - на железе
+  он не работает.** Первая версия брала и пинг, и сам список серверов
+  из него. Проверено на R2S: запрос шёл 10147мс и упирался в
+  `curl -m 10` → `delays:{}` → в dropdown только «Авто». Причина в
+  sing-box: urltest-группа гоняет пробу с concurrency 10, на ~90
+  серверах это заметно дольше любого разумного rpc-таймаута LuCI; плюс
+  если в этот момент идёт её собственная фоновая проверка
+  (`checking.Swap(true)`), отдаётся сразу пустой `{}`. К тому же
+  failed-серверы в ответ не попадают вообще. Поэтому список серверов
+  теперь берётся только из `MANUAL.all`, а пинг - из истории (сервер
+  без успешной последней проверки просто без пинга, «нет ответа»);
 - `darkcore-singbox-select-profile <tag>` — `PUT /proxies/MANUAL`.
 - Заменили ими старый `darkcore-singbox-profile-status` (был
   read-only, показывал только текущий профиль+пинг) - `profile-list`

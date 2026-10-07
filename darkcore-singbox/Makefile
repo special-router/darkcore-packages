@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-singbox
 PKG_VERSION:=1.11.15
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 
 # ВАЖНО: не поднимать выше 1.11.x без проверки. С 1.12.0 sing-box перешёл
 # на форк github.com/metacubex/utls, который через common/badtls тянет
@@ -70,7 +70,7 @@ GO_PKG_LDFLAGS_X:=$(GO_PKG)/constant.Version=$(SINGBOX_VERSION)
 # уже имеющемся go.sum.fixed, новых модулей не требует (видимо,
 # go-chi/chi/v5 и остальное, что ему нужно, уже и так в графе через
 # with_utls). Нужен для страницы статуса в LuCI - список профилей с
-# живым пингом + ручной выбор (см. darkcore-singbox-profile-list,
+# пингом (из urltest-истории GLOBAL AUTO) + ручной выбор (см. darkcore-singbox-profile-list,
 # darkcore-singbox-select-profile, sing-box-sync-manual-selector в
 # files/, experimental.clash_api/cache_file в files/conf.d/00-base.json).
 GO_PKG_TAGS:=with_utls with_clash_api
