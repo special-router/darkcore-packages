@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=darkcore-singbox
 PKG_VERSION:=1.11.15
-PKG_RELEASE:=8
+PKG_RELEASE:=9
 
 # ВАЖНО: не поднимать выше 1.11.x без проверки. С 1.12.0 sing-box перешёл
 # на форк github.com/metacubex/utls, который через common/badtls тянет
@@ -100,6 +100,8 @@ define Package/darkcore-singbox/description
   darkcore-xray). Ставит UCI-схему, procd-init с валидацией конфига перед
   применением, TPROXY-правила nftables и watchdog для автоматического
   фейл-опена на прямой интернет, если все proxy-outbound'ы недоступны.
+  Трафик в российские IP/домены (geoip-ru/geosite-category-ru) идёт
+  напрямую, минуя VPN; весь остальной - через proxy ("всё кроме РФ").
 endef
 
 define Package/darkcore-singbox/conffiles
@@ -129,6 +131,10 @@ define Package/darkcore-singbox/install
 
 	$(INSTALL_DIR) $(1)/usr/share/sing-box/
 	$(INSTALL_DATA) $(CURDIR)/files/nftables.rulesv46 $(1)/usr/share/sing-box/
+
+	$(INSTALL_DIR) $(1)/usr/share/sing-box/rule-sets/
+	$(INSTALL_DATA) $(CURDIR)/files/rule-sets/geoip-ru.srs $(1)/usr/share/sing-box/rule-sets/
+	$(INSTALL_DATA) $(CURDIR)/files/rule-sets/geosite-category-ru.srs $(1)/usr/share/sing-box/rule-sets/
 endef
 
 $(eval $(call BuildPackage,darkcore-singbox))

@@ -14,7 +14,8 @@
       "tag": "tproxy-in",
       "listen": "::",
       "listen_port": 12345,
-      "network": ["tcp", "udp"]
+      "network": ["tcp", "udp"],
+      "sniff": true
     },
     {
       "type": "mixed",
@@ -32,8 +33,13 @@
   ],
   "route": {
     "auto_detect_interface": true,
+    "rule_set": [
+      { "type": "local", "tag": "geoip-ru", "path": "/usr/share/sing-box/rule-sets/geoip-ru.srs" },
+      { "type": "local", "tag": "geosite-category-ru", "path": "/usr/share/sing-box/rule-sets/geosite-category-ru.srs" }
+    ],
     "rules": [
-      { "inbound": ["tproxy-in"], "port": 53, "action": "hijack-dns" }
+      { "inbound": ["tproxy-in"], "port": 53, "action": "hijack-dns" },
+      { "rule_set": ["geoip-ru", "geosite-category-ru"], "outbound": "direct" }
     ]
   },
   "experimental": {

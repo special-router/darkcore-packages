@@ -22,7 +22,7 @@ OpenWrt/FriendlyWrt package feed с **backend-компонентами** про�
 | пакет | версия | роль |
 |---|---|---|
 | `darkcore-main` | 1.2.0 | UCI-каркас `/etc/config/darkcore` (`activation_code`, `device_token`, `config_url`, `api_base`) |
-| `darkcore-singbox` | 1.12.4-1 | сам прокси (sing-box) + routing + nft + config-валидация + fail-open watchdog |
+| `darkcore-singbox` | 1.11.15-9 | сам прокси (sing-box) + routing + nft + config-валидация + fail-open watchdog + RU geoip/geosite bypass |
 | `dcvpnupd` | 0.3.1 | cron `*/5`: меняет одноразовый код на device_token, тянет sing-box конфиг с backend, рестартит сервис |
 | `geoupdate` | 0.0.5 | cron `15 0`: освежает `geoip.dat`/`geosite.dat` (задел под xray, сейчас мёртвый груз — см. ниже) |
 
@@ -177,9 +177,61 @@ Go-пакет: `sing-box` v1.12.4 (тарбол с codeload,
   пустой фрагмент; `direct`-outbound и так есть в `00-base.json`, так что
   неактивированный роутер работает в режиме «всё напрямую» без отдельного
   плейсхолдерного `direct`).
-- **Никаких geoip/geosite/ad-block правил** — сознательно не перенесены с
-  xray в v1 (нужен `.srs`-формат sing-box + отдельный шаг в `build.sh`,
-  отдельная задача на будущее).
+- **2026-10-12: geoip/geosite для RU - "всё кроме РФ"** (было отложено в
+  v1, см. ниже). `route.rule_set` (`00-base.json`) заводит два локальных
+  rule-set'а: `geoip-ru` (`files/rule-sets/geoip-ru.srs`, 25171
+  CIDR-блоков) и `geosite-category-ru`
+  (`files/rule-sets/geosite-category-ru.srs`, 869 доменных суффиксов -
+  `.ru`/`.su`/`.moscow`/`.tatar`/IDN `.рф` и т.п. + 234 точных домена).
+  Правило `{"rule_set":["geoip-ru","geosite-category-ru"],"outbound":
+  "direct"}` стоит сразу после `hijack-dns` в `rules` - матчит раньше
+  `route.final` (который продолжает указывать на `MANUAL`/`GLOBAL AUTO`),
+  так что российские IP/домены идут напрямую, всё остальное - через VPN.
+  Оба массива (`rule_set`, `rules`) конкатенируются при мердже `-C`, как
+  и `outbounds` - конфликтов с `80-manual.json`/`90-proxy.json` нет (они
+  `rule_set`/доп. `rules` не трогают).
+  - `.srs`-файлы - **вендорятся готовыми** (бинарные, закоммичены в
+    `files/rule-sets/`), а не генерируются на сборочной машине и не
+    качаются в `build.sh`: взяты из релиза `sing-box.zip`
+    (`github.com/runetfreedom/russia-v2ray-rules-dat`, тот же источник,
+    на котором раньше держались `geoip.dat`/`geosite.dat` для xray) -
+    этот же проект уже сам публикует готовые sing-box `.srs` под
+    `rule-set-geoip/geoip-ru.srs` и `rule-set-geosite/geosite-category-
+    ru.srs`. Версия формата внутри файлов - `SRS\x01` (`RuleSetVersion1`,
+    минимальная/самая совместимая) - подходит для нашего зафиксированного
+    sing-box 1.11.15 без каких-либо сомнений в совместимости.
+  - **Нельзя** генерировать эти `.srs` через `sing-box geoip export`/
+    `sing-box geosite export` из уже скачиваемых v2ray-формата
+    `geoip.dat`/`geosite.dat` (как можно было бы предположить по
+    аналогии с xray) - эти подкоманды в sing-box читают СВОЙ собственный
+    скомпилированный формат (`sing-geoip` maxmind-db / `sing-box`'овский
+    `geosite.db` с заголовком-metadata), а не исходный protobuf v2fly
+    `geosite.dat`/`geoip.dat` - проверено чтением
+    `cmd/sing-box/cmd_geoip.go`/`common/geosite/reader.go` в теге
+    `v1.11.15` сорцов sing-box. Готовый `sing-box.zip` от того же
+    runetfreedom обходит эту проблему - они уже сделали конвертацию на
+    своей стороне.
+  - `"sniff": true` добавлен на `tproxy-in` (00-base.json) - без него
+    geosite (доменные) правила не матчатся на TPROXY-трафике вообще
+    (нет домена в метаданных соединения, только IP) - sniffing разбирает
+    TLS SNI/HTTP Host из самого TCP-потока до роутинга. Это **устаревшее
+    inline-поле** (`sniff` на инбаунде, не через `route.rules`'s `action:
+    "sniff"`) - актуально и работает в зафиксированной 1.11.15
+    (`removed in sing-box 1.13.0` согласно докам тега 1.11.15, т.е. есть
+    запас в несколько минорных версий); при будущем поднятии версии
+    sing-box выше 1.13 потребуется переписать на rule-action-форму.
+  - **Проверено офлайн** (не на роутере, инструментом): скопирован
+    `sing-box` 1.13.12 (`/opt/v2rayN/bin/sing_box/sing-box` на
+    сборочной машине, из несвязанного GUI-клиента, только для разовой
+    проверки синтаксиса) во временный confdir с переписанными путями на
+    `rule-sets/` - `sing-box check -C` проходит без ошибок (кроме
+    ожидаемых 1.12+/1.13+ deprecation-гейтов, не относящихся к этому
+    изменению, и removal инлайн-`sniff` в 1.13 - ожидаемо, не баг для
+    1.11.15); `sing-box rule-set decompile` на оба `.srs` подтвердил
+    реальное содержимое (25171 `ip_cidr`, 869 `domain_suffix` + 234
+    `domain`). Живой тест на реальном железе (активация, сравнение
+    внешнего IP для `.ru`-домена и для всего остального) - ещё не
+    делался, нужен до следующего релиза образа.
 - `nftables.rulesv46` — `table inet sing-box`, один в один правила
   `darkcore-xray` (тот же TPROXY-порт `12345`, тот же локальный
   `10808`, те же bypass'ы) — коллизий нет, xray полностью убран.
@@ -350,9 +402,15 @@ per-device `config_url` (текущий, код-активации flow).
   на финализации образа (без явного `enable` в Makefile — дефолт
   OpenWrt).
 - `build.sh`'s `wget` `geoip.dat`/`geosite.dat` в `usr/share/xray/`
-  **убран** вместе с `darkcore-xray` (v1 sing-box не использует
-  geoip-правила). `geoupdate` продолжает качать эти же файлы по крону —
-  теперь их никто не читает, дохлый груз (см. `darkcorewrt/TODO.md`).
+  **убран** вместе с `darkcore-xray`. `geoupdate` продолжает качать эти
+  же (v2ray-формата, для xray) файлы по крону - никто их больше не
+  читает, дохлый груз (см. `darkcorewrt/TODO.md`). **2026-10-12:** у
+  sing-box теперь СВОИ geoip/geosite-правила для RU (см. `darkcore-
+  singbox` выше) - но это отдельные `.srs`-файлы, вендоренные прямо в
+  пакет, а не то, что тянет `geoupdate`; `geoupdate` по-прежнему мёртв
+  и их не обновляет (не трогал его в рамках этой задачи, чтобы не
+  смешивать "завести RU-правила" с "оживить периодическое обновление" -
+  см. TODO).
 
 ## Сборка пакетов
 
