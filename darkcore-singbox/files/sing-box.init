@@ -48,12 +48,21 @@ setup_routing() {
     if ! ip route show table $TABLE_ID | grep -q "default via $GATEWAY"; then
         ip route add default via $GATEWAY table $TABLE_ID
     fi
+
+    # nftables also intercepts IPv6. Route marked packets to the local
+    # TPROXY listener so LAN IPv6 traffic cannot bypass sing-box.
+    if ! ip -6 rule show | grep -Eq "fwmark (0x0*${FWMARK#0x}|${FWMARK})(/0xffffffff)? lookup $TABLE_ID"; then
+        ip -6 rule add fwmark $FWMARK table $TABLE_ID
+    fi
+    ip -6 route add local ::/0 dev lo table $TABLE_ID 2>/dev/null
 }
 
 cleanup_routing() {
     ip rule del fwmark $FWMARK table $TABLE_ID 2>/dev/null
     ip route del local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
     ip route del default via $GATEWAY table $TABLE_ID 2>/dev/null
+    ip -6 rule del fwmark $FWMARK table $TABLE_ID 2>/dev/null
+    ip -6 route del local ::/0 dev lo table $TABLE_ID 2>/dev/null
 }
 
 # sing-box check -C <confdir> - валидация смёрженного конфига перед

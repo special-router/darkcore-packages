@@ -22,7 +22,7 @@ OpenWrt/FriendlyWrt package feed с **backend-компонентами** про�
 | пакет | версия | роль |
 |---|---|---|
 | `darkcore-main` | 1.2.0 | UCI-каркас `/etc/config/darkcore` (`activation_code`, `device_token`, `config_url`, `api_base`) |
-| `darkcore-singbox` | 1.11.15-9 | сам прокси (sing-box) + routing + nft + config-валидация + fail-open watchdog + RU geoip/geosite bypass |
+| `darkcore-singbox` | 1.11.15-10 | сам прокси (sing-box) + routing + nft + config-валидация + fail-open watchdog + RU geoip/geosite bypass |
 | `dcvpnupd` | 0.3.1 | cron `*/5`: меняет одноразовый код на device_token, тянет sing-box конфиг с backend, рестартит сервис |
 | `geoupdate` | 0.0.5 | cron `15 0`: освежает `geoip.dat`/`geosite.dat` (задел под xray, сейчас мёртвый груз — см. ниже) |
 
